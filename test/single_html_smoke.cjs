@@ -1,0 +1,11 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+assert.deepEqual(fs.readdirSync("dist-web"), ["index.html"]);
+const html = fs.readFileSync("dist-web/index.html", "utf8");
+assert.match(html, /<script(?:\s[^>]*)?>[\s\S]+<\/script>/i);
+assert.doesNotMatch(html, /<script[^>]+\bsrc\s*=/i);
+assert.doesNotMatch(html, /<link[^>]+\brel=["']?stylesheet/i);
+assert.match(html, /Third-Party Licenses/);
+assert.match(html, /krilla-svg 0\.8\.1/);
+assert.match(html, /data:application\/wasm;base64/);
+console.log(`Single HTML verified: ${Buffer.byteLength(html)} bytes.`);

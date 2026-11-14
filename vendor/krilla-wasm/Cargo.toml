@@ -1,0 +1,21 @@
+[package]
+name = "krilla-svg-wasm-poc"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+krilla = { version = "0.8.2", default-features = false, features = ["raster-images"] }
+krilla-svg = "0.8.1"
+fontdb = "0.23"
+usvg = "0.47"
+wasm-bindgen = "0.2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

@@ -1,0 +1,6 @@
+node_modules/
+dist-web/
+dist-release/
+work/
+*.log
+vendor/krilla-wasm/target/
