@@ -28,8 +28,10 @@ clean:
 VERSION := $(shell node -p 'require("./package.json").version')
 ARCHIVE_NAME := kuroko-v$(VERSION)
 archive:
-	mkdir -p dist-release/$(ARCHIVE_NAME)
-	cp dist-web/index.html kuroko.sh README.md LICENSE.md THIRD_PARTY_LICENSES.md dist-release/$(ARCHIVE_NAME)/
+	rm -rf dist-release/$(ARCHIVE_NAME) dist-release/$(ARCHIVE_NAME).zip
+	mkdir -p dist-release/$(ARCHIVE_NAME)/docs
+	cp dist-web/index.html kuroko.sh README.md README.ja.md LICENSE.md THIRD_PARTY_LICENSES.md dist-release/$(ARCHIVE_NAME)/
+	cp docs/development.md dist-release/$(ARCHIVE_NAME)/docs/
 	cd dist-release && zip -q -r $(ARCHIVE_NAME).zip $(ARCHIVE_NAME)
 	zip -T dist-release/$(ARCHIVE_NAME).zip
 release-archive: check

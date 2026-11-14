@@ -1,6 +1,7 @@
 node_modules/
 dist-web/
 dist-release/
+dist-site/
 work/
 *.log
 vendor/krilla-wasm/target/
