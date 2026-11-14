@@ -22,6 +22,7 @@ check:
 production-smoke: production
 	node test/single_html_smoke.cjs
 	node test/web_app_smoke.cjs
+	node test/save_history_smoke.cjs
 clean:
 	rm -rf dist-web dist-release
 

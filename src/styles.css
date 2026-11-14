@@ -66,6 +66,22 @@ kbd { font-family: inherit; font-size: 11px; opacity: .65; margin-left: 5px; }
 .font-ready { color: #3d7d5f; }
 .source-text { width: 100%; height: 40vh; resize: vertical; font: 11px/1.6 monospace; border: 1px solid #c9cdd1; margin-bottom: 12px; padding: 8px; }
 .license-text { max-height: 40vh; overflow: auto; white-space: pre-wrap; font-size: 10px; line-height: 1.5; }
+.suggestion-previews { display: flex; gap: 16px; }
+.suggestion-previews figure { flex: 1; min-width: 0; margin: 0; text-align: center; }
+.suggestion-previews img { display: block; width: 100%; height: 150px; object-fit: contain; border: 1px solid #d7dce0; background: white; }
+.suggestion-previews figcaption { font-size: 12px; color: #66737e; margin-top: 4px; }
+.candidate-list { margin: 16px 0; border: 1px solid #d7dce0; border-radius: 4px; }
+.candidate-list label { display: flex; align-items: center; gap: 10px; padding: 7px 0; cursor: pointer; }
+.candidate-list strong, .save-history-list strong { overflow-wrap: anywhere; }
+.candidate-list small, .save-history-list small { display: block; color: #66737e; font-size: 11px; }
+.save-destination-note { font-size: 13px; overflow-wrap: anywhere; }
+button.primary-button { background: #365e7b; border-color: #365e7b; color: white; }
+button.primary-button:hover:not(:disabled) { background: #294b64; }
+.history-preference { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.save-history-list { list-style: none; padding: 0; max-height: 40vh; overflow: auto; }
+.save-history-list li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e4e7ea; }
+.save-history-list img { width: 80px; height: 50px; object-fit: contain; border: 1px solid #e4e7ea; }
+.save-history-list li > span { flex: 1; min-width: 0; }
 .log-pane { flex-shrink: 0; position: relative; background: #f7f8fa; min-height: 96px; display: flex; flex-direction: column; border-top: 1px solid #aab2bb; }
 .log-pane-resizer { position: absolute; top: -3px; left: 0; right: 0; height: 6px; cursor: ns-resize; touch-action: none; }
 .log-pane header { display: flex; align-items: center; gap: 12px; padding: 5px 12px; border-bottom: 1px solid #d8dde2; min-height: 36px; }

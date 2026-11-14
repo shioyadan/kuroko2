@@ -18,6 +18,9 @@ async function ready(page) {
     await page.waitForFunction(() => document.querySelector("main")?.getAttribute("aria-busy") === "false", undefined, { timeout: 60000 });
     if (await page.getByRole("alert").count()) throw new Error(await page.getByRole("alert").innerText());
     await page.getByAltText("Generated PDF preview", { exact: true }).waitFor({ timeout: 60000 });
+    // The history-specific suite verifies confirmation; keep unrelated smoke flows explicit.
+    const suggestion = page.getByRole("dialog", { name: "Save matching figure", exact: true });
+    if (await suggestion.count()) await suggestion.getByRole("button", { name: "Not now", exact: true }).click();
     assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), true);
 }
 async function save(page, fileName) {

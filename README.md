@@ -35,7 +35,24 @@ You may need to load fonts once per session so the PDF uses the same typefaces a
 
 PDF creation resumes automatically when the missing fonts are loaded. While the preview says
 “SVG preview · PDF pending,” the PDF is not ready yet. Loaded figures and fonts are kept only
-until you close or reload the page.
+until you close or reload the page. Save history separately remembers names, small previews and save destinations on this device.
+
+### Editing and saving similar figures
+
+Save a figure once with your chosen PDF name. When you paste a slightly edited
+version, Kuroko compares it with your recent saves and automatically suggests a
+name after the PDF is ready. Check the previous and current previews, then choose:
+
+- **Overwrite PDF** to save to the previously selected file, when the browser can reuse that destination. Nothing is overwritten until you confirm.
+- **Save with this name** when the previous destination is unavailable. The browser opens a save dialog or downloads a new copy.
+- **Save as…** to choose a different name or destination, or **Not now** to continue without saving.
+
+The **Save history** button lets you forget entries, clear history, or turn off
+automatic suggestions. It remembers up to 30 recent saves made with this feature;
+it does not scan existing PDFs on your computer. Clearing history does not delete
+PDF files. History is specific to the browser and site, and stays on your device.
+In browsers that only download files, Kuroko cannot overwrite an earlier download
+or know whether the download finished; the browser controls duplicate names.
 
 ## Known limitations and troubleshooting
 

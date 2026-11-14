@@ -45,6 +45,11 @@ recovery, logs, mobile layout, and the absence of external HTTP requests.
 Native PowerPoint clipboard formats and OS permission dialogs still need manual
 testing on the target platform.
 
+The save-history suite uses real serializable handles in the browser's test
+filesystem. It checks edited-figure matching, reload persistence, confirmation
+before writes, denied permissions, Save as, clearing history and unavailable
+storage without touching user files.
+
 `make release-archive` runs checks and packages the app as
 `dist-release/kuroko-v<version>.zip`. `make archive ARCHIVE_NAME=kuroko-latest`
 packages the already-built app under the stable download filename used on Pages.
@@ -83,12 +88,23 @@ toolbar and paste/save flow follow the original Kuroko.
 | `src/core/conversion_worker.ts` | krilla-svg WASM conversion |
 | `src/core/pdf_preview_worker.ts` | Render the generated PDF with PDFium |
 | `src/file_access.ts` | Save picker and download fallback |
+| `src/core/figure_match.ts` | A small ink-layout descriptor and shape histogram for similar-figure suggestions |
+| `src/save_history.ts` | Bounded IndexedDB history, thumbnails and reusable save handles |
 | `vendor/krilla-wasm/` | Validated WASM binary, Rust source and Cargo.lock from the SVG experiment |
 
 Conversion and preview workers are terminated on completion, cancellation or
 timeout. PDFium supports the type-1 shadings emitted by krilla for reflected Office
 gradients. PDF.js is a development dependency used only for independent text
 extraction tests.
+
+Successful saves (or started downloads) add up to 30 history entries with a
+32×32 ink descriptor, shape counts, a thumbnail up to 240×150 and the file name. Native
+save handles are persisted where supported. Complete SVG/PDF/font contents are
+not retained. The similarity threshold gates suggestions; it is a heuristic, not
+a probability, and matching never authorizes a write. A separate confirmation
+action requests write permission and reuses the exact saved handle. Saving is
+locked against new input until its result is recorded. Storage failures retain
+session-only history without blocking PDF saving.
 
 SVG dimensions use 96 CSS px per inch and PDF dimensions use 72 pt per inch.
 The source SVG remains unchanged for inspection/download. Sanitized and prepared

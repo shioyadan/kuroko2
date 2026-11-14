@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { BsClipboard, BsFileEarmarkArrowDown, BsFolder2Open, BsFonts, BsInfoCircle, BsJournalText, BsCodeSlash, BsX, BsArrowsFullscreen } from "react-icons/bs";
+import { BsClipboard, BsFileEarmarkArrowDown, BsFolder2Open, BsFonts, BsInfoCircle, BsJournalText, BsCodeSlash, BsX, BsArrowsFullscreen, BsClockHistory } from "react-icons/bs";
 import { Store } from "./store";
 import { fontKey, fontLabel } from "./core/svg";
 import { LogPane, type LogEntry, type LogLevel } from "./components/log_pane";
+import { SaveSuggestion } from "./components/save_suggestion";
 
 function editable(target: EventTarget | null): boolean {
     return target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input,textarea,select"));
@@ -23,7 +24,7 @@ export function App({ store }: { store: Store }) {
     const officeInput = useRef<HTMLInputElement>(null);
     const previewArea = useRef<HTMLDivElement>(null);
     const [available, setAvailable] = useState({ width: 800, height: 600 });
-    const [dialog, setDialog] = useState<"fonts" | "source" | "about" | null>(null);
+    const [dialog, setDialog] = useState<"fonts" | "source" | "about" | "history" | null>(null);
     const [dragging, setDragging] = useState(false);
     const [logs, setLogs] = useState<readonly LogEntry[]>([]);
     const [logOpen, setLogOpen] = useState(false);
@@ -101,7 +102,7 @@ export function App({ store }: { store: Store }) {
         <input ref={officeInput} type="file" multiple hidden aria-label="Select Office CloudFonts folder" {...{ webkitdirectory: "" }} onChange={event => filesSelected(event.currentTarget, true)} />
         <nav className="toolbar" aria-label="Main toolbar">
             <span className="brand">Kuroko</span>
-            <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
+            <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
             <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
             <label className="auto-capture" title="Read the clipboard when this window regains focus. Browser permission is required.">
                 <input type="checkbox" checked={state.autoCapture} onChange={event => store.dispatch({ type: "SET_AUTO_CAPTURE", value: event.currentTarget.checked })} />Auto Capture on Focus
@@ -110,6 +111,7 @@ export function App({ store }: { store: Store }) {
             <button className="icon-button" aria-label="Open SVG" title="Open SVG" onClick={() => svgInput.current?.click()}><BsFolder2Open /></button>
             <button className={`icon-button ${missing.size ? "attention" : ""}`} aria-label="Fonts" title="Fonts" onClick={() => setDialog("fonts")}><BsFonts /></button>
             <button className="icon-button" aria-label="View source SVG" title="View source SVG" disabled={!documentData} onClick={() => setDialog("source")}><BsCodeSlash /></button>
+            <button className="icon-button" aria-label="Save history" title="Save history" onClick={() => setDialog("history")}><BsClockHistory /></button>
             <button className="icon-button" aria-label="About Kuroko" title="About Kuroko" onClick={() => setDialog("about")}><BsInfoCircle /></button>
         </nav>
         {state.error && <div className="notice error" role="alert">{state.error}</div>}
@@ -147,6 +149,25 @@ export function App({ store }: { store: Store }) {
         <footer className="status-bar"><span role="status">{state.saving ? "Saving PDF…" : state.status}</span>
             <button className={warning ? "unread-warning" : ""} onClick={toggleLog} aria-expanded={logOpen}><BsJournalText /> Log{unread > 0 ? ` (${unread})` : ""}</button>
         </footer>
+        {state.suggestionOpen && state.suggestions.length > 0 && state.preview && dialog === null && <Dialog title="Save matching figure" onClose={() => store.dispatch({ type: "DISMISS_SUGGESTION" })}>
+            <SaveSuggestion key={state.preview} candidates={state.suggestions} currentPreview={state.preview}
+                onSave={id => store.dispatch({ type: "CONFIRM_SUGGESTION", id })}
+                onSaveAs={id => store.dispatch({ type: "SAVE_AS", id })}
+                onDismiss={() => store.dispatch({ type: "DISMISS_SUGGESTION" })} />
+        </Dialog>}
+        {dialog === "history" && <Dialog title="Save history" onClose={() => setDialog(null)}>
+            <label className="history-preference"><input type="checkbox" checked={state.suggestNames} onChange={event => store.dispatch({ type: "SET_SUGGEST_NAMES", value: event.currentTarget.checked })} />Suggest file names after conversion</label>
+            <p className="help-text">The last 30 saved figures are remembered on this device using their names, small previews and save destinations. Full SVGs, PDFs and fonts are not stored. Download entries record a started download; the browser controls its final location and name.</p>
+            {!state.historyPersistent && <p role="status">History is available for this session only because browser storage is unavailable.</p>}
+            <ul className="save-history-list">{state.history.map(record => <li key={record.id}>
+                <img src={record.thumbnail} alt="Saved figure thumbnail" />
+                <span><strong>{record.name}</strong><small>{new Date(record.savedAt).toLocaleString()}</small></span>
+                <button disabled={state.saving} onClick={() => store.dispatch({ type: "REMOVE_HISTORY", id: record.id })} aria-label={`Forget ${record.name}`}>Forget</button>
+            </li>)}</ul>
+            {!state.history.length && <p>No saved figures yet. Save a PDF to start building your history.</p>}
+            <button disabled={state.saving || !state.history.length} onClick={() => store.dispatch({ type: "REMOVE_HISTORY" })}>Clear history</button>
+            <p className="help-text">Forgetting history does not delete PDF files.</p>
+        </Dialog>}
         {dialog === "fonts" && <Dialog title="Fonts" onClose={() => setDialog(null)}>
             <p>PDF export uses the original font files. Load the fonts used by your figure once per session.</p>
             <div className="dialog-actions">
@@ -159,7 +180,7 @@ export function App({ store }: { store: Store }) {
             {documentData?.fonts.length ? <ul className="font-list">{documentData.fonts.map(font => <li key={fontKey(font)}><span>{fontLabel(font)}</span><span className={missing.has(fontKey(font)) ? "font-missing" : "font-ready"}>{missing.has(fontKey(font)) ? "Missing" : "Ready"}</span></li>)}</ul> : <p>No text fonts required.</p>}
             <h3>Loaded fonts ({state.loadedFonts.length})</h3>
             <p>{state.loadedFonts.join(", ") || "No fonts loaded yet."}</p>
-            <p className="help-text">Figures and fonts are processed on this device. They are not uploaded or stored between sessions.</p>
+            <p className="help-text">Figures and fonts are processed on this device and are not uploaded. Save history keeps small previews and names; it does not keep font files.</p>
         </Dialog>}
         {dialog === "source" && documentData && <Dialog title="Source SVG" onClose={() => setDialog(null)}>
             <p>Original SVG from {state.source}</p>
