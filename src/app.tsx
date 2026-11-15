@@ -118,6 +118,14 @@ export function App({ store }: { store: Store }) {
             <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
             <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
             <span className="toolbar-spacer" />
+            {(documentData || state.busy) && <div className={`toolbar-status ${missing.size && !state.busy ? "toolbar-status-needed" : ""}`}>
+                {state.busy ? <span className="spinner" aria-hidden="true" /> : <BsFonts aria-hidden="true" />}
+                <span className="toolbar-status-text" role="status" title={state.busy ? state.status : state.missingFonts.map(fontLabel).join(", ")}>{state.busy ? state.status
+                    : missing.size ? `Fonts needed (${missing.size})`
+                    : documentData?.fonts.length ? "Fonts ready" : "No fonts needed"}</span>
+                {state.busy ? <button className="status-cancel" aria-label={state.fontLoading ? "Cancel font loading" : "Cancel"} title="Cancel" onClick={() => store.dispatch({ type: "CANCEL" })}><BsX aria-hidden="true" /></button>
+                    : missing.size > 0 && !state.busy && <button className="font-add" onClick={openFonts}>Add fonts…</button>}
+            </div>}
             <ApplicationMenu>
                 <button aria-label="Open SVG" onClick={() => svgInput.current?.click()}><BsFolder2Open aria-hidden="true" />Open SVG…</button>
                 <button className={missing.size ? "attention" : ""} onClick={openFonts}><BsFonts aria-hidden="true" />Fonts</button>
@@ -129,10 +137,6 @@ export function App({ store }: { store: Store }) {
         {(state.error || state.saveFailed) && <div className={`notice ${state.error ? "error" : "save-incomplete"}`} role={state.error ? "alert" : "status"}>
             {state.error || "No file was saved. If you confirmed the save dialog, try downloading the PDF instead."}
             {state.saveFailed && state.pdf && <button className="save-fallback" disabled={state.busy || state.saving} onClick={() => store.dispatch({ type: "DOWNLOAD_PDF" })}>Download PDF instead</button>}
-        </div>}
-        {missing.size > 0 && !state.busy && <div className="notice font-notice">
-            <span><strong>Fonts needed for PDF</strong><br />{state.missingFonts.map(fontLabel).join(", ")}</span>
-            <button onClick={openFonts}>Add fonts…</button>
         </div>}
         <main ref={previewArea} className={`preview-area ${dragging ? "dragging" : ""}`} aria-label="Figure preview" aria-busy={state.busy}>
             {!documentData ? <div className="empty-state">
@@ -146,7 +150,6 @@ export function App({ store }: { store: Store }) {
                 <img src={state.preview ?? svgPreview} alt={state.preview ? "Generated PDF preview" : "Source SVG preview; PDF not yet generated"} draggable={false} />
                 {!state.pdf && <span className="preview-label">SVG preview · PDF pending</span>}
             </div>}
-            {state.busy && <div className="processing" role="status"><span className="spinner" />{state.status}<button onClick={() => store.dispatch({ type: "CANCEL" })}>Cancel</button></div>}
             {dragging && <div className="drop-overlay">Drop SVG to create a PDF</div>}
         </main>
         <div className="document-bar">

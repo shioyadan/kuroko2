@@ -25,6 +25,8 @@ A typical use is preparing figures for LaTeX papers and presentations.
 
 You can open an SVG file directly or drag it into the window. The menu (☰) at the
 top right contains Open SVG, Fonts, View source SVG, Save history and About kuroko 2.
+Clipboard reading, PDF creation and preview rendering progress appear at the top
+right of the toolbar. Use the × beside the progress message to cancel.
 
 
 ### Loading fonts
@@ -33,7 +35,8 @@ The fonts needed by your figure are loaded automatically when you paste it. On
 first use, allow the browser to access your fonts if asked. Granted fonts are also
 loaded automatically after a page reload.
 
-If fonts are still needed, click Add fonts… next to their names. Menu → Fonts opens the same guide.
+The top right of the toolbar shows whether fonts are loading, missing or ready.
+If fonts are still needed, click Add fonts… there. Menu → Fonts opens the same guide.
 
 - If permission is needed, click Allow font access. If access is blocked or unavailable, the guide offers folder selection.
 - Click Choose font folder… to find the missing fonts in that folder and its subfolders. For Office fonts such as Aptos, select the `CloudFonts` folder under `%LOCALAPPDATA%\Microsoft\FontCache`. Other installed fonts are usually in `C:\Windows\Fonts`.

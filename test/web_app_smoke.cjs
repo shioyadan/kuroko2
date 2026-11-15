@@ -58,6 +58,21 @@ async function save(page, fileName) {
         assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false);
         await page.screenshot({ path: path.join(work, "empty.png") });
 
+        // Input progress and cancellation are available before the first document exists.
+        await page.evaluate(() => {
+            Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+                read: () => new Promise(resolve => { window.finishClipboardRead = () => resolve([]); })
+            } });
+        });
+        const toolbar = page.getByRole("navigation", { name: "Main toolbar", exact: true });
+        await toolbar.getByRole("button", { name: /^Paste Objects/ }).click();
+        await toolbar.getByRole("status").filter({ hasText: "Reading clipboard…" }).waitFor();
+        assert.equal(await page.locator(".processing").count(), 0);
+        await toolbar.getByRole("button", { name: "Cancel", exact: true }).click();
+        await page.evaluate(() => window.finishClipboardRead());
+        await page.getByText("Cancelled.", { exact: true }).waitFor();
+        assert.equal(await toolbar.getByRole("status").count(), 0);
+
         // The disclosure menu supports the keyboard and preserves file-picker activation.
         const menuButton = page.getByLabel("Application menu", { exact: true });
         const menu = page.locator(".application-menu");
@@ -75,11 +90,27 @@ async function save(page, fileName) {
         await page.getByRole("heading", { name: "PowerPoint → PDF" }).click();
         assert.equal(await menu.evaluate(element => element.open), false);
         await menuButton.click();
+        await page.evaluate(() => {
+            window.conversionProgress = [];
+            window.progressPopupSeen = false;
+            window.progressObserver = new MutationObserver(() => {
+                const message = document.querySelector(".toolbar-status [role=status]")?.textContent;
+                if (["Creating PDF…", "Rendering PDF preview…"].includes(message)) window.conversionProgress.push(message);
+                if (document.querySelector(".processing")) window.progressPopupSeen = true;
+            });
+            window.progressObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
+        });
         const openFile = page.waitForEvent("filechooser");
         await page.getByRole("button", { name: "Open SVG", exact: true }).click();
         await (await openFile).setFiles({ name: "figure.svg", mimeType: "image/svg+xml", buffer: Buffer.from(shapes) });
         assert.equal(await menu.evaluate(element => element.open), false);
         await ready(page);
+        const progress = await page.evaluate(() => {
+            window.progressObserver.disconnect();
+            return { stages: [...new Set(window.conversionProgress)], popup: window.progressPopupSeen };
+        });
+        assert.deepEqual(progress.stages, ["Creating PDF…", "Rendering PDF preview…"], "both conversion stages appear in the toolbar");
+        assert.equal(progress.popup, false, "conversion progress must never cover the preview");
         const bytes = await save(page, "vector.pdf");
         const raw = bytes.toString("latin1");
         assert.match(raw, /\/MediaBox\s*\[\s*0\s+0\s+144\s+72\s*\]/);
@@ -187,7 +218,7 @@ async function save(page, fileName) {
 
         const textFigure = svg('<rect width="192" height="96" fill="white"/><text x="12" y="52" font-family="DejaVu Sans" font-size="24">Hello Ω</text>');
         await paste(page, textFigure);
-        await page.getByText("Fonts needed for PDF", { exact: true }).waitFor();
+        await page.getByText(/^Fonts needed \(/).waitFor();
         assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false);
         await page.getByLabel("Select font files", { exact: true }).setInputFiles(process.env.TEST_FONT_PATH || "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
         await ready(page);
@@ -201,13 +232,13 @@ async function save(page, fileName) {
 
         // Local font names must not silently accept the wrong family or missing glyphs.
         await paste(page, textFigure.replace("DejaVu Sans", "DejaVu Sans Missing"));
-        await page.getByText("Fonts needed for PDF", { exact: true }).waitFor();
+        await page.getByText(/^Fonts needed \(/).waitFor();
         assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false);
         await paste(page, textFigure.replace("Hello Ω", "&#x10ffff;"));
         await page.getByRole("alert").filter({ hasText: "missing glyphs" }).waitFor();
 
         await page.getByLabel("Open SVG file", { exact: true }).setInputFiles(path.join(root, "test/fixtures/ram.svg"));
-        await page.getByRole("button", { name: "Cancel", exact: true }).click();
+        await toolbar.getByRole("button", { name: "Cancel", exact: true }).click();
         await page.getByText("Cancelled.", { exact: true }).waitFor();
         assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false);
 

@@ -47,7 +47,7 @@ async function ready(page) {
         const url = `http://127.0.0.1:${server.address().port}/`;
         await page.goto(url);
         await paste(page, textFigure);
-        await page.getByText("Fonts needed for PDF", { exact: true }).waitFor();
+        await page.getByText(/^Fonts needed \(/).waitFor();
         assert.equal(await page.evaluate(() => window.localFontQueries), 0, "first use still requires permission");
 
         // Exercise Chromium's actual permission and installed font API, not a mock catalog.
@@ -59,7 +59,7 @@ async function ready(page) {
         await paste(page, textFigure);
         await ready(page);
         assert.equal(await page.evaluate(() => window.localFontQueries), 1);
-        assert.equal(await page.getByText("Fonts needed for PDF", { exact: true }).count(), 0);
+        assert.equal(await page.getByText(/^Fonts needed \(/).count(), 0);
         await paste(page, textFigure.replace("Hello Ω", "Hello again"));
         await ready(page);
         assert.equal(await page.evaluate(() => window.localFontQueries), 1, "later pastes reuse the local catalog");
@@ -84,7 +84,7 @@ async function ready(page) {
         await page.reload();
         await page.evaluate(() => { window.queryLocalFonts = async () => { throw new DOMException("Font access unavailable", "SecurityError"); }; });
         await paste(page, textFigure);
-        await page.getByText("Fonts needed for PDF", { exact: true }).waitFor();
+        await page.getByText(/^Fonts needed \(/).waitFor();
         assert.equal(await page.getByRole("alert").count(), 0);
         await page.getByRole("button", { name: "Add fonts…", exact: true }).click();
         const guide = page.getByRole("dialog", { name: "Fonts", exact: true });
@@ -118,6 +118,7 @@ async function ready(page) {
             window.queryLocalFonts = async () => {
                 window.fontQueries++;
                 window.fontQueryGestures.push(navigator.userActivation.isActive);
+                if (window.holdFontQuery) await new Promise(resolve => { window.releaseFontQuery = resolve; });
                 if (window.fontResponse === "dismiss") return [];
                 if (window.fontResponse === "deny") { window.fontPermission = "denied"; return []; }
                 window.fontPermission = "granted";
@@ -128,20 +129,37 @@ async function ready(page) {
         const firstUse = await firstUseContext.newPage();
         firstUse.on("pageerror", error => errors.push(error.message));
         await firstUse.goto(url);
+        await firstUse.evaluate(() => { window.holdFontQuery = true; });
         await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
+        await firstUse.locator(".toolbar .toolbar-status").getByText("Loading fonts…", { exact: true }).waitFor();
+        assert.equal(await firstUse.locator(".processing").count(), 0, "font loading stays in the toolbar");
         assert.equal(await firstUse.getByRole("dialog").count(), 0, "pasting does not open the font guide");
+        await firstUse.screenshot({ path: path.join(root, "work/font-status-loading.png") });
+        await firstUse.evaluate(() => window.releaseFontQuery());
         await ready(firstUse);
+        await firstUse.locator(".toolbar .toolbar-status").getByText("Fonts ready", { exact: true }).waitFor();
         assert.equal(await firstUse.evaluate(() => window.fontQueries), 1);
         assert.deepEqual(await firstUse.evaluate(() => window.fontQueryGestures), [true], "first-use permission is requested within the paste gesture");
         assert.equal(await firstUse.getByRole("button", { name: "Add fonts…", exact: true }).count(), 0);
 
+        // Cancelling from the toolbar must suppress the pending conversion.
+        await firstUse.reload();
+        await firstUse.evaluate(() => { window.holdFontQuery = true; window.fontResponse = "dismiss"; });
+        await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
+        await firstUse.getByRole("navigation", { name: "Main toolbar", exact: true }).getByRole("button", { name: "Cancel font loading", exact: true }).click();
+        await firstUse.evaluate(() => window.releaseFontQuery());
+        await firstUse.getByText("Cancelled.", { exact: true }).waitFor();
+        assert.equal(await firstUse.getByRole("button", { name: "Cancel font loading", exact: true }).count(), 0);
+        assert.equal(await firstUse.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false);
+        assert.equal(await firstUse.getByAltText("Generated PDF preview", { exact: true }).count(), 0);
+
         await firstUse.reload();
         await firstUse.evaluate(() => { window.fontResponse = "dismiss"; });
         await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
-        await firstUse.getByText("Fonts needed for PDF", { exact: true }).waitFor();
-        assert.equal(await firstUse.locator(".font-notice button").count(), 1, "only one recovery action is offered");
+        await firstUse.getByText(/^Fonts needed \(/).waitFor();
+        assert.equal(await firstUse.locator(".toolbar-status button").count(), 1, "only one recovery action is offered");
         await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
-        await firstUse.getByText("Fonts needed for PDF", { exact: true }).waitFor();
+        await firstUse.getByText(/^Fonts needed \(/).waitFor();
         assert.equal(await firstUse.evaluate(() => window.fontQueries), 1, "dismissal does not nag on subsequent pastes");
         await firstUse.getByRole("button", { name: "Add fonts…", exact: true }).click();
         const setup = firstUse.getByRole("dialog", { name: "Fonts", exact: true });
@@ -156,7 +174,7 @@ async function ready(page) {
         await firstUse.reload();
         await firstUse.evaluate(() => { window.fontResponse = "deny"; });
         await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
-        await firstUse.getByText("Fonts needed for PDF", { exact: true }).waitFor();
+        await firstUse.getByText(/^Fonts needed \(/).waitFor();
         await firstUse.getByRole("button", { name: "Add fonts…", exact: true }).click();
         await setup.getByText(/Font access is blocked/).waitFor();
         assert.equal(await setup.getByRole("button", { name: "Allow font access", exact: true }).count(), 0);
@@ -171,8 +189,13 @@ async function ready(page) {
         await firstUse.reload();
         await firstUse.evaluate(() => { window.queryLocalFonts = undefined; });
         await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
-        await firstUse.getByText("Fonts needed for PDF", { exact: true }).waitFor();
+        await firstUse.getByText(/^Fonts needed \(/).waitFor();
+        await firstUse.screenshot({ path: path.join(root, "work/font-status-needed.png") });
+        await firstUse.setViewportSize({ width: 390, height: 700 });
+        await firstUse.screenshot({ path: path.join(root, "work/font-status-mobile.png") });
+        assert.equal(await firstUse.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
         await firstUse.getByLabel("Application menu", { exact: true }).click();
+        await firstUse.screenshot({ path: path.join(root, "work/application-menu-mobile.png") });
         await firstUse.getByRole("button", { name: "Fonts", exact: true }).click();
         await setup.getByText(/This browser cannot load installed fonts automatically/).waitFor();
         await firstUse.setViewportSize({ width: 390, height: 700 });

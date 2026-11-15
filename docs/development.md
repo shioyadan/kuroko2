@@ -115,7 +115,9 @@ automatically enumerates installed fonts. First use can request permission while
 the paste/open gesture is still active; a dismissed prompt is not repeated
 automatically during the session. Granted access needs no gesture. Concurrent
 queries share one enumeration, and cancelled conversions cannot start a prompt.
-The Add fonts… notice and Menu → Fonts open the same setup guide:
+The toolbar shows progress for clipboard reading, font loading, PDF creation and
+preview rendering, with a cancellation action beside it. When idle it shows the
+font state and, when needed, Add fonts…. Add fonts… and Menu → Fonts open the same setup guide:
 permission when needed, then folder selection for remaining fonts, with an
 individual-file fallback. File selection never triggers a new permission prompt.
 The catalog and selected folders are reused for the session; only the permission

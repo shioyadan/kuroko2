@@ -22,6 +22,7 @@ export interface StoreSnapshot {
     readonly missingFonts: readonly FontRequirement[];
     readonly loadedFonts: readonly string[];
     readonly fontAccess: LocalFontAccess;
+    readonly fontLoading: boolean;
     readonly fileName: string;
     readonly source: string;
     readonly zoom: number | "fit";
@@ -60,7 +61,7 @@ function aborted(error: unknown): boolean { return error instanceof DOMException
 export class Store {
     private state: StoreSnapshot = {
         document: null, pdf: null, preview: null, busy: false, saving: false, saveFailed: false,
-        status: "Copy a figure in PowerPoint, then paste it here.", error: "", missingFonts: [], loadedFonts: [], fontAccess: "unknown",
+        status: "Copy a figure in PowerPoint, then paste it here.", error: "", missingFonts: [], loadedFonts: [], fontAccess: "unknown", fontLoading: false,
         fileName: "figure.pdf", source: "", zoom: "fit",
         history: [], suggestions: [], suggestionOpen: false, suggestNames: true, historyPersistent: true
     };
@@ -95,10 +96,10 @@ export class Store {
         this.state = { ...this.state, ...patch };
         this.listeners.forEach(listener => listener());
     }
-    private start(status: string): number {
+    private start(status: string, fontLoading = false): number {
         this.controller?.abort();
         this.controller = new AbortController();
-        this.publish({ busy: true, error: "", saveFailed: false, status, suggestionOpen: false, suggestions: [] });
+        this.publish({ busy: true, fontLoading, error: "", saveFailed: false, status, suggestionOpen: false, suggestions: [] });
         return ++this.requestId;
     }
 
@@ -128,19 +129,19 @@ export class Store {
                 break;
             case "CANCEL":
                 this.controller?.abort(); this.requestId++;
-                this.publish({ busy: false, status: "Cancelled.", error: "" });
+                this.publish({ busy: false, fontLoading: false, status: "Cancelled.", error: "" });
                 break;
             case "SET_FILE_NAME": this.nameEdited = true; this.publish({ fileName: action.value }); break;
             case "SET_ZOOM": this.publish({ zoom: action.value }); break;
             case "ALLOW_FONT_ACCESS": {
                 if (this.state.busy || this.state.saving) return;
-                const id = this.start("Waiting for local font access…");
+                const id = this.start("Waiting for local font access…", true);
                 void this.resolveAndConvert(id, "explicit");
                 break;
             }
             case "ADD_FONTS": {
                 if (this.state.busy || this.state.saving || !action.files.length) return;
-                const id = this.start("Reading font files…");
+                const id = this.start("Reading font files…", true);
                 if (action.directory) this.fontFolderFiles = action.files;
                 void this.addFontFiles(action.files, !!action.directory, id);
                 break;
@@ -158,10 +159,10 @@ export class Store {
                 console.info(`PDF ready: ${action.bytes.length} bytes.`);
                 break;
             case "FAIL": {
-                if (aborted(action.error)) { this.publish({ busy: false, status: "Cancelled." }); break; }
+                if (aborted(action.error)) { this.publish({ busy: false, fontLoading: false, status: "Cancelled." }); break; }
                 const error = message(action.error);
                 console.error(error);
-                this.publish({ busy: false, error, status: "Could not complete the operation." });
+                this.publish({ busy: false, fontLoading: false, error, status: "Could not complete the operation." });
                 break;
             }
             case "SAVE_PDF":
@@ -282,9 +283,9 @@ export class Store {
     private async resolveAndConvert(id: number, promptMode: FontPromptMode = "automatic"): Promise<void> {
         const document = this.state.document;
         try {
-            if (!document) { this.publish({ busy: false, status: "Fonts loaded. Paste a figure to continue." }); return; }
+            if (!document) { this.publish({ busy: false, fontLoading: false, status: "Fonts loaded. Paste a figure to continue." }); return; }
             if (this.fonts.missing(document.fonts).length) {
-                this.publish({ status: "Loading fonts…" });
+                this.publish({ fontLoading: true, status: "Loading fonts…" });
                 const fontAccess = await this.fonts.ensureLocal(promptMode, () => id === this.requestId);
                 if (id !== this.requestId) return;
                 this.publish({ fontAccess });
@@ -293,7 +294,7 @@ export class Store {
             await this.scanFontFolder(id);
             if (id !== this.requestId) return;
             const missingFonts = this.fonts.missing(document.fonts);
-            this.publish({ missingFonts, loadedFonts: this.fonts.labels(), pdf: null, preview: null });
+            this.publish({ missingFonts, fontLoading: false, loadedFonts: this.fonts.labels(), pdf: null, preview: null });
             if (missingFonts.length) {
                 console.warn(`Missing fonts: ${missingFonts.map(fontLabel).join(", ")}`);
                 this.publish({ busy: false, status: "Choose Add fonts… to complete the PDF." });
