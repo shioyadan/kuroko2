@@ -28,7 +28,7 @@ async function fileBytes(page, name = "diagram.pdf") {
         fs.createReadStream(path.join(root, "dist-web/index.html")).pipe(response);
     });
     await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-    const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || undefined, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || undefined, args: ["--no-sandbox", "--disable-dev-shm-usage", "--no-proxy-server", "--host-resolver-rules=MAP kuroko.test 127.0.0.1"] });
     try {
         const context = await browser.newContext();
         // Real, serializable handles in the origin's test filesystem exercise IndexedDB
@@ -36,6 +36,11 @@ async function fileBytes(page, name = "diagram.pdf") {
         await context.addInitScript(() => {
             window.pickerCalls = 0;
             window.nativeRequestPermission = FileSystemHandle.prototype.requestPermission;
+            const close = FileSystemWritableFileStream.prototype.close;
+            FileSystemWritableFileStream.prototype.close = function () {
+                if (window.failClose) return Promise.reject(new DOMException("Write was interrupted", "AbortError"));
+                return close.call(this);
+            };
             Object.defineProperty(window, "showSaveFilePicker", { configurable: true, value: async options => {
                 window.pickerCalls++;
                 const directory = await navigator.storage.getDirectory();
@@ -50,6 +55,17 @@ async function fileBytes(page, name = "diagram.pdf") {
         await paste(page, original);
         assert.equal(await page.getByRole("dialog").count(), 0);
         await page.getByLabel("PDF file name", { exact: true }).fill("diagram.pdf");
+        await page.evaluate(() => { window.failClose = true; });
+        await page.getByRole("button", { name: /^Save PDF/ }).click();
+        await page.getByRole("alert").filter({ hasText: "finalizing the file: AbortError" }).waitFor();
+        await page.getByText("PDF was not saved.", { exact: true }).waitFor();
+        await page.getByRole("button", { name: "Save history", exact: true }).click();
+        await page.getByText("No saved figures yet. Save a PDF to start building your history.").waitFor();
+        await page.getByRole("button", { name: "Close Save history", exact: true }).click();
+        await page.getByRole("button", { name: /^Log/ }).click();
+        await page.getByRole("region", { name: "Application log" }).getByText(/PDF save failed while finalizing the file: AbortError/).waitFor();
+        await page.getByRole("button", { name: "Close application log", exact: true }).click();
+        await page.evaluate(() => { window.failClose = false; });
         await page.getByRole("button", { name: /^Save PDF/ }).click();
         await page.getByText("Saved: diagram.pdf", { exact: true }).waitFor();
         const first = await fileBytes(page);
@@ -122,19 +138,47 @@ async function fileBytes(page, name = "diagram.pdf") {
         const ephemeral = await browser.newContext({ acceptDownloads: true });
         await ephemeral.addInitScript(() => {
             Object.defineProperty(window, "indexedDB", { get: () => { throw new Error("Storage unavailable"); } });
-            Object.defineProperty(window, "showSaveFilePicker", { value: undefined });
+            Object.defineProperty(window, "showSaveFilePicker", { value: async () => { throw new DOMException("Native save unavailable", "NotAllowedError"); } });
         });
         const fallback = await ephemeral.newPage();
         await fallback.goto(url);
         await paste(fallback, original);
         await fallback.getByLabel("PDF file name", { exact: true }).fill("download.pdf");
-        const download = fallback.waitForEvent("download");
         await fallback.getByRole("button", { name: /^Save PDF/ }).click();
-        assert.equal((await download).suggestedFilename(), "download.pdf");
+        await fallback.getByRole("alert").filter({ hasText: "Native save unavailable" }).waitFor();
+        const download = fallback.waitForEvent("download");
+        await fallback.getByRole("button", { name: "Download PDF instead", exact: true }).click();
+        const recovered = await download;
+        assert.equal(recovered.suggestedFilename(), "download.pdf");
+        assert.equal(await recovered.failure(), null);
+        assert.match(fs.readFileSync(await recovered.path()).toString("latin1"), /^%PDF-/);
         await fallback.getByText("Download started: download.pdf", { exact: true }).waitFor();
         await paste(fallback, edited);
         await fallback.getByRole("dialog", { name: "Save matching figure", exact: true }).waitFor();
         assert.equal(await fallback.getByRole("button", { name: "Overwrite PDF", exact: true }).count(), 0);
-        console.log("Save history smoke passed: edited-figure matching, persistence, confirmation, overwrite, permission denial, Save as, preferences, multiple candidates, unrelated input, forget/clear and unavailable storage.");
+
+        // Ordinary HTTP hosts lack randomUUID, but must still save and remember PDFs.
+        const httpContext = await browser.newContext({ acceptDownloads: true });
+        const httpPage = await httpContext.newPage();
+        const httpErrors = [];
+        httpPage.on("pageerror", error => httpErrors.push(error.message));
+        await httpPage.goto(`http://kuroko.test:${server.address().port}/`);
+        assert.equal(await httpPage.evaluate(() => isSecureContext), false);
+        assert.equal(await httpPage.evaluate(() => typeof crypto.randomUUID), "undefined");
+        await paste(httpPage, original);
+        await httpPage.getByLabel("PDF file name", { exact: true }).fill("http.pdf");
+        const httpDownload = httpPage.waitForEvent("download");
+        await httpPage.getByRole("button", { name: /^Save PDF/ }).click();
+        const downloaded = await httpDownload;
+        assert.equal(await downloaded.failure(), null);
+        assert.match(fs.readFileSync(await downloaded.path()).toString("latin1"), /^%PDF-/);
+        await httpPage.getByText("Download started: http.pdf", { exact: true }).waitFor();
+        await httpPage.getByRole("button", { name: "Save history", exact: true }).click();
+        await httpPage.getByRole("dialog", { name: "Save history", exact: true }).getByText("http.pdf", { exact: true }).waitFor();
+        await httpPage.reload();
+        await paste(httpPage, edited);
+        await httpPage.getByRole("dialog", { name: "Save matching figure", exact: true }).getByText("http.pdf", { exact: true }).waitFor();
+        assert.deepEqual(httpErrors, []);
+        console.log("Save history smoke passed: real file writes/readback, aborted-write reporting, explicit download recovery, HTTP downloads/history, edited-figure matching, persistence, confirmation, overwrite, permission denial, Save as, preferences, multiple candidates, unrelated input, forget/clear and unavailable storage.");
     } finally { await browser.close(); server.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

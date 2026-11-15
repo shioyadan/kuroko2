@@ -114,7 +114,10 @@ export function App({ store }: { store: Store }) {
             <button className="icon-button" aria-label="Save history" title="Save history" onClick={() => setDialog("history")}><BsClockHistory /></button>
             <button className="icon-button" aria-label="About Kuroko" title="About Kuroko" onClick={() => setDialog("about")}><BsInfoCircle /></button>
         </nav>
-        {state.error && <div className="notice error" role="alert">{state.error}</div>}
+        {(state.error || state.saveFailed) && <div className={`notice ${state.error ? "error" : "save-incomplete"}`} role={state.error ? "alert" : "status"}>
+            {state.error || "No file was saved. If you confirmed the save dialog, try downloading the PDF instead."}
+            {state.saveFailed && state.pdf && <button className="save-fallback" disabled={state.busy || state.saving} onClick={() => store.dispatch({ type: "DOWNLOAD_PDF" })}>Download PDF instead</button>}
+        </div>}
         {missing.size > 0 && <div className="notice font-notice">
             <span><strong>Fonts needed for PDF</strong><br />{state.missingFonts.map(fontLabel).join(", ")}</span>
             <button disabled={state.busy} onClick={() => store.dispatch({ type: "LOCAL_FONTS" })}>Use Local Fonts</button>
@@ -146,7 +149,7 @@ export function App({ store }: { store: Store }) {
             </select>
         </div>
         {logOpen && <LogPane entries={logs} onClear={() => setLogs([])} onClose={toggleLog} />}
-        <footer className="status-bar"><span role="status">{state.saving ? "Saving PDF…" : state.status}</span>
+        <footer className="status-bar"><span role="status">{state.status}</span>
             <button className={warning ? "unread-warning" : ""} onClick={toggleLog} aria-expanded={logOpen}><BsJournalText /> Log{unread > 0 ? ` (${unread})` : ""}</button>
         </footer>
         {state.suggestionOpen && state.suggestions.length > 0 && state.preview && dialog === null && <Dialog title="Save matching figure" onClose={() => store.dispatch({ type: "DISMISS_SUGGESTION" })}>

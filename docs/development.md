@@ -48,7 +48,9 @@ testing on the target platform.
 The save-history suite uses real serializable handles in the browser's test
 filesystem. It checks edited-figure matching, reload persistence, confirmation
 before writes, denied permissions, Save as, clearing history and unavailable
-storage without touching user files.
+storage without touching user files. It also checks interrupted writes, readback
+of saved files, explicit download recovery, and history persistence on ordinary
+HTTP origins where `crypto.randomUUID()` is unavailable.
 
 `make release-archive` runs checks and packages the app as
 `dist-release/kuroko-v<version>.zip`. `make archive ARCHIVE_NAME=kuroko-latest`
@@ -105,6 +107,16 @@ a probability, and matching never authorizes a write. A separate confirmation
 action requests write permission and reuses the exact saved handle. Saving is
 locked against new input until its result is recorded. Storage failures retain
 session-only history without blocking PDF saving.
+
+Save stages appear in the status bar and log. An `AbortError` from the file picker
+means it returned no destination; the app cannot distinguish cancellation from a
+browser rejection. Errors while opening, writing or closing a file are
+reported as failed saves. Native file handles are read back after closing to check
+the size and PDF header before adding history. A failed native save offers an
+explicit download fallback, whose history entry has no reusable file handle. This
+fallback is also offered after a picker `AbortError`, but requires another click
+so cancelling the picker never starts a download automatically. The PDF picker has
+a stable `id` so its last directory is remembered separately from SVG/font pickers.
 
 SVG dimensions use 96 CSS px per inch and PDF dimensions use 72 pt per inch.
 The source SVG remains unchanged for inspection/download. Sanitized and prepared

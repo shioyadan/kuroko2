@@ -147,9 +147,21 @@ async function save(page, fileName) {
         await page.getByText("Saved: picked.pdf", { exact: true }).waitFor();
         assert.equal(await page.evaluate(() => window.saveClosed && window.savedPdfSize > 100), true);
         await page.evaluate(() => Object.defineProperty(window, "showSaveFilePicker", { configurable: true, value: async () => { throw new DOMException("Cancelled", "AbortError"); } }));
+        let cancelledDownloads = 0;
+        const countCancelledDownload = () => { cancelledDownloads++; };
+        page.on("download", countCancelledDownload);
         await page.getByRole("button", { name: /^Save PDF/ }).click();
         await page.getByText("Save cancelled.", { exact: true }).waitFor();
         assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), true);
+        assert.equal(cancelledDownloads, 0, "a cancelled/interrupted picker must not start a download automatically");
+        page.off("download", countCancelledDownload);
+        const recoveredDownload = page.waitForEvent("download");
+        await page.getByRole("button", { name: "Download PDF instead", exact: true }).click();
+        const recovered = await recoveredDownload;
+        assert.equal(recovered.suggestedFilename(), "picked.pdf");
+        assert.equal(await recovered.failure(), null);
+        assert.match(fs.readFileSync(await recovered.path()).toString("latin1"), /^%PDF-/);
+        await page.getByText("Download started: picked.pdf", { exact: true }).waitFor();
         await page.evaluate(() => Object.defineProperty(window, "showSaveFilePicker", { value: undefined, configurable: true }));
 
         const textFigure = svg('<rect width="192" height="96" fill="white"/><text x="12" y="52" font-family="DejaVu Sans" font-size="24">Hello Ω</text>');

@@ -11,6 +11,11 @@ export interface SavedFigure extends FigureMemory {
 const DATABASE = "kuroko.saveHistory";
 const STORE = "figures";
 
+export function saveHistoryId(): string {
+    // randomUUID is unavailable on plain HTTP origins; getRandomValues also works there.
+    return Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DATABASE, 1);

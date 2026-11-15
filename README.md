@@ -62,8 +62,9 @@ or know whether the download finished; the browser controls duplicate names.
 
 - Cannot paste: the copied content must include SVG. Check the selected objects and copy them again in PowerPoint. Clipboard content containing only EMF or PNG is not supported. You can also save the figure as SVG and open that file.
 - Permission prompts: clipboard and local font access require browser permission. If the offline app restricts these features, use the [web app](https://shioyadan.github.io/kuroko2/) or select SVG and font files directly.
-- Cannot save: missing fonts, missing characters or font embedding restrictions can prevent PDF creation. Check the message on screen and the Log pane.
+- Cannot save: missing fonts, missing characters or font embedding restrictions can prevent PDF creation. Check the message on screen and the Log pane. If writing to the selected file fails, use Download PDF instead in the error message to save a new copy through your browser.
 - No save dialog: some browsers download the PDF instead. Check your browser's download location.
+- Saving to WSL from Windows: Chrome's file access restrictions can reject WSL folders after you confirm the save dialog. Save to a Windows folder and copy the PDF into WSL, or try Download PDF instead. See the [Chromium report](https://issues.chromium.org/issues/553114097).
 - Some SVG effects and font settings are not supported. Check the preview before saving. Any whitespace included in the SVG is retained in the PDF.
 
 

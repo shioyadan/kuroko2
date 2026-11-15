@@ -34,6 +34,8 @@ kbd { font-family: inherit; font-size: 11px; opacity: .65; margin-left: 5px; }
 .drop-hint { display: block; }
 .notice { flex-shrink: 0; padding: 12px 20px; line-height: 1.5; }
 .notice.error { background: #fff0ef; color: #8e302c; border-bottom: 1px solid #e9c5c2; }
+.notice.save-incomplete { background: #fff6e6; color: #6c5129; border-bottom: 1px solid #e6d4b4; }
+.save-fallback { margin-left: 12px; }
 .font-notice { display: flex; gap: 12px; align-items: center; background: #fff6e6; color: #6c5129; border-bottom: 1px solid #e6d4b4; font-size: 12px; }
 .font-notice > span { flex: 1; }
 .font-notice strong { font-weight: 600; }

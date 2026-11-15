@@ -8,7 +8,7 @@ import { renderPdf } from "./core/pdf_preview";
 import { fontLabel, normalizeFontFamily, parseSvg, type FontRequirement, type SvgDocument } from "./core/svg";
 import { downloadBlob, pdfFileName, savePdf, type SaveResult } from "./file_access";
 import { describeFigure, matchingFigures, type FigureMemory } from "./core/figure_match";
-import { loadSaveHistory, putSavedFigure, removeSavedFigures, MAX_SAVE_HISTORY, type SavedFigure } from "./save_history";
+import { loadSaveHistory, putSavedFigure, removeSavedFigures, saveHistoryId, MAX_SAVE_HISTORY, type SavedFigure } from "./save_history";
 
 export interface StoreSnapshot {
     readonly document: SvgDocument | null;
@@ -16,6 +16,7 @@ export interface StoreSnapshot {
     readonly preview: string | null;
     readonly busy: boolean;
     readonly saving: boolean;
+    readonly saveFailed: boolean;
     readonly status: string;
     readonly error: string;
     readonly missingFonts: readonly FontRequirement[];
@@ -40,6 +41,7 @@ export type Action =
     | { type: "LOCAL_FONTS" }
     | { type: "ADD_FONTS"; files: readonly File[]; directory?: boolean }
     | { type: "SAVE_PDF" }
+    | { type: "DOWNLOAD_PDF" }
     | { type: "SAVE_SVG" }
     | { type: "CONFIRM_SUGGESTION"; id: string }
     | { type: "SAVE_AS"; id: string }
@@ -50,6 +52,7 @@ export type Action =
     | { type: "FONTS_FINISH"; id: number }
     | { type: "CONVERT_FINISH"; id: number; bytes: Uint8Array<ArrayBuffer>; preview: string; memory: FigureMemory | null }
     | { type: "FAIL"; id: number; error: unknown; automatic?: boolean }
+    | { type: "SAVE_PROGRESS"; status: string }
     | { type: "SAVE_FINISH"; result?: SaveResult; error?: unknown };
 
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
@@ -57,7 +60,7 @@ function aborted(error: unknown): boolean { return error instanceof DOMException
 
 export class Store {
     private state: StoreSnapshot = {
-        document: null, pdf: null, preview: null, busy: false, saving: false,
+        document: null, pdf: null, preview: null, busy: false, saving: false, saveFailed: false,
         status: "Copy a figure in PowerPoint, then paste it here.", error: "", missingFonts: [], loadedFonts: [],
         autoCapture: false, fileName: "figure.pdf", source: "", zoom: "fit",
         history: [], suggestions: [], suggestionOpen: false, suggestNames: true, historyPersistent: true
@@ -92,7 +95,7 @@ export class Store {
     private start(status: string): number {
         this.controller?.abort();
         this.controller = new AbortController();
-        this.publish({ busy: true, error: "", status, suggestionOpen: false, suggestions: [] });
+        this.publish({ busy: true, error: "", saveFailed: false, status, suggestionOpen: false, suggestions: [] });
         return ++this.requestId;
     }
 
@@ -167,6 +170,9 @@ export class Store {
                 if (!this.nameEdited && this.state.suggestNames && this.state.suggestions.length) this.publish({ suggestionOpen: true });
                 else this.beginSave();
                 break;
+            case "DOWNLOAD_PDF":
+                if (this.state.saveFailed) this.beginSave(undefined, false, true);
+                break;
             case "CONFIRM_SUGGESTION":
             case "SAVE_AS": {
                 if (!this.state.suggestionOpen || this.state.saving || this.state.busy) return;
@@ -187,28 +193,39 @@ export class Store {
                     this.publish({ history: action.id ? this.state.history.filter(record => record.id !== action.id) : [], suggestions: [], suggestionOpen: false });
                 });
                 break;
+            case "SAVE_PROGRESS":
+                if (this.state.saving) { this.publish({ status: action.status }); console.info(action.status); }
+                break;
             case "SAVE_FINISH":
                 this.publish({ saving: false });
                 if (action.result) {
                     this.publish({ fileName: action.result.name, suggestions: [], status: `${action.result.downloaded ? "Download started" : "Saved"}: ${action.result.name}` });
                     console.info(this.state.status);
                 } else if (!aborted(action.error)) {
-                    const error = message(action.error); console.error(error); this.publish({ error });
-                } else this.publish({ status: "Save cancelled." });
+                    const error = message(action.error); console.error(error); this.publish({ error, saveFailed: true, status: "PDF was not saved." });
+                } else {
+                    // Chrome uses AbortError both for cancellation and an interrupted/rejected picker.
+                    console.info(`Save dialog ended without a destination: ${message(action.error)}`);
+                    this.publish({ saveFailed: true, status: "Save cancelled." });
+                }
                 break;
             case "SAVE_SVG":
                 if (this.state.document) downloadBlob(new Blob([this.state.document.raw], { type: "image/svg+xml" }), pdfFileName(this.state.fileName).replace(/\.pdf$/, ".svg"));
                 break;
         }
     }
-    private beginSave(record?: SavedFigure, reuse = false): void {
+    private beginSave(record?: SavedFigure, reuse = false, downloadOnly = false): void {
         if (!this.state.pdf || this.state.busy || this.state.saving) return;
         const memory = this.memory;
         const name = record?.name ?? pdfFileName(this.state.fileName);
-        this.publish({ saving: true, error: "", suggestionOpen: false });
+        this.publish({ saving: true, saveFailed: false, error: "", suggestionOpen: false, fileName: name });
         // Start file access in the confirmation click's call stack; no history I/O before it.
-        void savePdf(this.state.pdf, name, reuse ? record?.handle : undefined).then(async result => {
+        void savePdf(this.state.pdf, name, reuse ? record?.handle : undefined, {
+            downloadOnly, onProgress: status => this.dispatch({ type: "SAVE_PROGRESS", status })
+        }).then(async result => {
+            console.info(`${result.downloaded ? "Download handed to the browser" : "PDF file written"}: ${result.name}`);
             if (memory) {
+                this.dispatch({ type: "SAVE_PROGRESS", status: "Updating save history…" });
                 this.historyQueue = this.historyQueue.then(() => this.rememberSave(memory, result, reuse ? record : undefined)).catch(error => this.historyError(error));
                 await this.historyQueue;
             }
@@ -225,7 +242,7 @@ export class Store {
             } catch { /* An unavailable old destination is not the same file. */ }
             if (existing) break;
         }
-        const entry: SavedFigure = { ...memory, id: existing?.id ?? crypto.randomUUID(), name: result.name, savedAt: Date.now(), handle: result.handle };
+        const entry: SavedFigure = { ...memory, id: existing?.id ?? saveHistoryId(), name: result.name, savedAt: Date.now(), handle: result.handle };
         this.publish({ history: [entry, ...this.state.history.filter(record => record.id !== entry.id)].slice(0, MAX_SAVE_HISTORY) });
         try { await putSavedFigure(entry); } catch (error) { this.historyError(error); }
     }

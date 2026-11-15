@@ -63,3 +63,36 @@ test("confirmed destinations bypass the picker; denied permission never opens a 
         else Reflect.deleteProperty(globalThis, "window");
     }
 });
+
+test("writer AbortError is a save failure, picker cancellation remains cancellation, and saved bytes are checked", async () => {
+    const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const bytes = new TextEncoder().encode("%PDF-test");
+    let cancelPicker = false, failClose = true, wrongSize = false, aborts = 0, reads = 0;
+    const handle: SaveHandle = {
+        name: "figure.pdf",
+        getFile: async () => { reads++; return new File([wrongSize ? "" : bytes], "figure.pdf"); },
+        createWritable: async () => ({
+            write: async () => {},
+            close: async () => { if (failClose) throw new DOMException("Write was interrupted", "AbortError"); },
+            abort: async () => { aborts++; }
+        })
+    };
+    Object.defineProperty(globalThis, "window", { configurable: true, value: { showSaveFilePicker: async () => {
+        if (cancelPicker) throw new DOMException("User cancelled", "AbortError");
+        return handle;
+    } } });
+    try {
+        await assert.rejects(savePdf(bytes, "figure.pdf"), error => error instanceof Error && error.name !== "AbortError" && /finalizing.*AbortError/.test(error.message));
+        assert.equal(aborts, 1); assert.equal(reads, 0);
+        failClose = false; wrongSize = true;
+        await assert.rejects(savePdf(bytes, "figure.pdf"), /checking.*expected PDF/);
+        wrongSize = false;
+        assert.equal((await savePdf(bytes, "figure.pdf")).downloaded, false);
+        assert.equal(reads, 2);
+        cancelPicker = true;
+        await assert.rejects(savePdf(bytes, "figure.pdf"), error => error instanceof DOMException && error.name === "AbortError");
+    } finally {
+        if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+        else Reflect.deleteProperty(globalThis, "window");
+    }
+});
