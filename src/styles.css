@@ -14,8 +14,6 @@ kbd { font-family: inherit; font-size: 11px; opacity: .65; margin-left: 5px; }
 .toolbar button { background: transparent; border-color: transparent; padding: 9px 10px; color: #e7e9ec; }
 .toolbar button:hover:not(:disabled) { background: #484f57; }
 .toolbar .save-button { color: #fff; }
-.auto-capture { display: flex; align-items: center; gap: 7px; margin-left: 12px; font-size: 13px; white-space: nowrap; cursor: pointer; }
-.auto-capture input { accent-color: #9dbad0; }
 .toolbar-spacer { flex: 1; }
 .icon-button { width: 32px; height: 32px; padding: 6px; font-size: 17px; }
 .toolbar .attention { color: #f6d39b; }
@@ -100,6 +98,6 @@ button.primary-button:hover:not(:disabled) { background: #294b64; }
 .log-entry-warning, .log-entry-warning > span { color: #93601e; }
 .log-entry-error, .log-entry-error > span { color: #a03939; }
 .log-pane-empty { color: #818b94; }
-@media (max-width: 850px) { .brand { display: none; } .toolbar { flex-wrap: wrap; gap: 0; padding: 6px 8px; } .toolbar kbd { display: none; } .auto-capture { font-size: 11px; margin-left: 4px; } .font-notice { flex-wrap: wrap; gap: 6px; } .font-notice > span { flex-basis: 100%; } }
-@media (max-width: 550px) { .toolbar .auto-capture { order: 3; width: 100%; padding: 5px 4px 0; } .toolbar button { font-size: 12px; padding: 7px; } .toolbar .icon-button { font-size: 15px; width: 28px; } .dimensions { display: none; } .document-bar { padding: 7px 10px; gap: 5px; } .document-bar input { width: 125px; } .preview-area { padding: 18px; } .empty-state h1 { font-size: 21px; } }
+@media (max-width: 850px) { .brand { display: none; } .toolbar { flex-wrap: wrap; gap: 0; padding: 6px 8px; } .toolbar kbd { display: none; } .font-notice { flex-wrap: wrap; gap: 6px; } .font-notice > span { flex-basis: 100%; } }
+@media (max-width: 550px) { .toolbar button { font-size: 12px; padding: 7px; } .toolbar .icon-button { font-size: 15px; width: 28px; } .dimensions { display: none; } .document-bar { padding: 7px 10px; gap: 5px; } .document-bar input { width: 125px; } .preview-area { padding: 18px; } .empty-state h1 { font-size: 21px; } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

@@ -10,7 +10,7 @@ const textFigure = svg('<text x="12" y="52" font-family="DejaVu Sans" font-size=
 async function paste(page, text) {
     const session = await page.context().newCDPSession(page);
     try {
-        // No user activation: this also covers Auto Capture on Focus.
+        // Granted fonts remain available during asynchronous loading without user activation.
         await session.send("Runtime.evaluate", { expression: `(${(text => {
             const clipboardData = new DataTransfer(); clipboardData.setData("image/svg+xml", text);
             window.dispatchEvent(new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }));

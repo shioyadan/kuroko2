@@ -23,8 +23,7 @@ A typical use is preparing figures for LaTeX papers and presentations.
 4. If fonts are missing, load them as described below.
 5. Check the PDF preview, then click Save PDF or press Ctrl+S / ⌘S.
 
-Enable Auto Capture on Focus to paste automatically when you return to the Kuroko window.
-You can also open an SVG file directly or drag it into the window.
+You can open an SVG file directly or drag it into the window.
 
 
 ### Loading fonts

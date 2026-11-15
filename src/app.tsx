@@ -67,11 +67,8 @@ export function App({ store }: { store: Store }) {
                 if (!document.querySelector("dialog[open]")) store.dispatch({ type: "SAVE_PDF" });
             }
         };
-        const focus = () => {
-            if (store.getSnapshot().autoCapture && !document.querySelector("dialog[open]")) store.dispatch({ type: "PASTE", automatic: true });
-        };
-        window.addEventListener("paste", paste); window.addEventListener("keydown", keydown); window.addEventListener("focus", focus);
-        return () => { window.removeEventListener("paste", paste); window.removeEventListener("keydown", keydown); window.removeEventListener("focus", focus); };
+        window.addEventListener("paste", paste); window.addEventListener("keydown", keydown);
+        return () => { window.removeEventListener("paste", paste); window.removeEventListener("keydown", keydown); };
     }, [store]);
     const toggleLog = () => {
         logOpenRef.current = !logOpenRef.current;
@@ -107,9 +104,6 @@ export function App({ store }: { store: Store }) {
             <span className="brand">Kuroko</span>
             <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
             <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
-            <label className="auto-capture" title="Read the clipboard when this window regains focus. Browser permission is required.">
-                <input type="checkbox" checked={state.autoCapture} onChange={event => store.dispatch({ type: "SET_AUTO_CAPTURE", value: event.currentTarget.checked })} />Auto Capture on Focus
-            </label>
             <span className="toolbar-spacer" />
             <button className="icon-button" aria-label="Open SVG" title="Open SVG" onClick={() => svgInput.current?.click()}><BsFolder2Open /></button>
             <button className={`icon-button ${missing.size ? "attention" : ""}`} aria-label="Fonts" title="Fonts" onClick={() => setDialog("fonts")}><BsFonts /></button>
@@ -197,7 +191,7 @@ export function App({ store }: { store: Store }) {
             <h3>Kuroko {__KUROKO_VERSION__}</h3><p>Paste a PowerPoint figure and save a vector PDF.</p>
             <p>Build: {__KUROKO_BUILD__}</p>
             <p>Single HTML · React · krilla-svg WASM<br />All conversion runs locally in your browser.</p>
-            <p className="help-text">Clipboard and automatic capture depend on browser permissions and the formats supplied by PowerPoint. Open SVG is available when clipboard access is unavailable.</p>
+            <p className="help-text">Clipboard access depends on browser permissions and the formats supplied by PowerPoint. Open SVG is available when clipboard access is unavailable.</p>
             <details><summary>Licenses</summary><pre className="license-text">{__KUROKO_LICENSES__}</pre></details>
         </Dialog>}
     </div>;

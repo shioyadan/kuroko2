@@ -40,7 +40,7 @@ to override the location of `DejaVuSans.ttf`.
 
 Browser tests open the production HTML via `file://` and check clipboard paths,
 PDF dimensions and vector output, embedded text extraction, missing fonts/glyphs,
-Office shadows and reflected gradients, save/cancel behavior, auto-capture error
+Office shadows and reflected gradients, save/cancel behavior, clipboard permission
 recovery, logs, mobile layout, and the absence of external HTTP requests.
 Native PowerPoint clipboard formats and OS permission dialogs still need manual
 testing on the target platform.

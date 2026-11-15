@@ -177,7 +177,7 @@ export class FontRegistry {
         try {
             permission = await navigator.permissions.query({ name: "local-fonts" as PermissionName });
         } catch { return; } // Unsupported permission descriptors keep the manual font workflow.
-        // Never open a permission prompt on automatic capture or repeatedly after denial.
+        // Never request permission implicitly or repeatedly after denial.
         if (permission.state === "granted") await this.queryLocal();
     }
     async resolve(requirements: readonly FontRequirement[]): Promise<string[]> {

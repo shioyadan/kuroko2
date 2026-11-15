@@ -118,16 +118,14 @@ async function save(page, fileName) {
         await paste(page, "");
         await ready(page);
 
-        await page.getByRole("checkbox", { name: "Auto Capture on Focus" }).check();
-        await ready(page);
-        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-        await page.getByText("Clipboard unchanged.", { exact: true }).waitFor();
         await page.evaluate(() => {
-            navigator.clipboard.read = async () => { throw new DOMException("Clipboard permission denied", "NotAllowedError"); };
+            window.clipboardReads = 0;
+            navigator.clipboard.read = async () => { window.clipboardReads++; throw new DOMException("Clipboard permission denied", "NotAllowedError"); };
             window.dispatchEvent(new Event("focus"));
         });
+        assert.equal(await page.evaluate(() => window.clipboardReads), 0, "focusing the app must not read the clipboard");
+        await page.getByRole("button", { name: /^Paste Objects/ }).click();
         await page.getByRole("alert").filter({ hasText: "Clipboard permission denied" }).waitFor();
-        assert.equal(await page.getByRole("checkbox", { name: "Auto Capture on Focus" }).isChecked(), false);
         await paste(page, shapes);
         await ready(page);
 

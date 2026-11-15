@@ -21,7 +21,6 @@ export interface StoreSnapshot {
     readonly error: string;
     readonly missingFonts: readonly FontRequirement[];
     readonly loadedFonts: readonly string[];
-    readonly autoCapture: boolean;
     readonly fileName: string;
     readonly source: string;
     readonly zoom: number | "fit";
@@ -32,10 +31,9 @@ export interface StoreSnapshot {
     readonly historyPersistent: boolean;
 }
 export type Action =
-    | { type: "PASTE"; data?: DataTransfer; automatic?: boolean }
+    | { type: "PASTE"; data?: DataTransfer }
     | { type: "OPEN_SVG"; file: File }
     | { type: "CANCEL" }
-    | { type: "SET_AUTO_CAPTURE"; value: boolean }
     | { type: "SET_FILE_NAME"; value: string }
     | { type: "SET_ZOOM"; value: number | "fit" }
     | { type: "LOCAL_FONTS" }
@@ -51,7 +49,7 @@ export type Action =
     | { type: "LOAD_FINISH"; id: number; document: SvgDocument; source: string }
     | { type: "FONTS_FINISH"; id: number }
     | { type: "CONVERT_FINISH"; id: number; bytes: Uint8Array<ArrayBuffer>; preview: string; memory: FigureMemory | null }
-    | { type: "FAIL"; id: number; error: unknown; automatic?: boolean }
+    | { type: "FAIL"; id: number; error: unknown }
     | { type: "SAVE_PROGRESS"; status: string }
     | { type: "SAVE_FINISH"; result?: SaveResult; error?: unknown };
 
@@ -62,7 +60,7 @@ export class Store {
     private state: StoreSnapshot = {
         document: null, pdf: null, preview: null, busy: false, saving: false, saveFailed: false,
         status: "Copy a figure in PowerPoint, then paste it here.", error: "", missingFonts: [], loadedFonts: [],
-        autoCapture: false, fileName: "figure.pdf", source: "", zoom: "fit",
+        fileName: "figure.pdf", source: "", zoom: "fit",
         history: [], suggestions: [], suggestionOpen: false, suggestNames: true, historyPersistent: true
     };
     private readonly listeners = new Set<() => void>();
@@ -107,10 +105,10 @@ export class Store {
         if ("id" in action && typeof action.id === "number" && action.id !== this.requestId) return;
         switch (action.type) {
             case "PASTE": {
-                if (this.state.saving || (action.automatic && (this.state.busy || this.state.suggestionOpen))) return;
+                if (this.state.saving) return;
                 const id = this.start("Reading clipboard…");
                 // readPaste snapshots event data now, before the event's lifetime ends.
-                void this.load(action.data ? readPaste(action.data) : readClipboard(), id, action.automatic);
+                void this.load(action.data ? readPaste(action.data) : readClipboard(), id);
                 break;
             }
             case "OPEN_SVG": {
@@ -130,10 +128,6 @@ export class Store {
             case "CANCEL":
                 this.controller?.abort(); this.requestId++;
                 this.publish({ busy: false, status: "Cancelled.", error: "" });
-                break;
-            case "SET_AUTO_CAPTURE":
-                this.publish({ autoCapture: action.value });
-                if (action.value) this.dispatch({ type: "PASTE", automatic: true });
                 break;
             case "SET_FILE_NAME": this.nameEdited = true; this.publish({ fileName: action.value }); break;
             case "SET_ZOOM": this.publish({ zoom: action.value }); break;
@@ -166,7 +160,7 @@ export class Store {
                 if (aborted(action.error)) { this.publish({ busy: false, status: "Cancelled." }); break; }
                 const error = message(action.error);
                 console.error(error);
-                this.publish({ busy: false, error, status: "Could not complete the operation.", ...(action.automatic ? { autoCapture: false } : {}) });
+                this.publish({ busy: false, error, status: "Could not complete the operation." });
                 break;
             }
             case "SAVE_PDF":
@@ -251,14 +245,13 @@ export class Store {
         this.publish({ history: [entry, ...this.state.history.filter(record => record.id !== entry.id)].slice(0, MAX_SAVE_HISTORY) });
         try { await putSavedFigure(entry); } catch (error) { this.historyError(error); }
     }
-    private async load(input: Promise<ClipboardSvg>, id: number, automatic = false): Promise<void> {
+    private async load(input: Promise<ClipboardSvg>, id: number): Promise<void> {
         try {
             const result = await input;
             if (id !== this.requestId) return;
-            if (automatic && this.state.document?.raw === result.text) { this.publish({ busy: false, status: "Clipboard unchanged." }); return; }
             console.info(`Clipboard / input formats: ${result.types.join(", ") || result.source}`);
             this.dispatch({ type: "LOAD_FINISH", id, document: parseSvg(result.text), source: result.source });
-        } catch (error) { this.dispatch({ type: "FAIL", id, error, automatic }); }
+        } catch (error) { this.dispatch({ type: "FAIL", id, error }); }
     }
     private async scanOfficeFiles(id: number): Promise<void> {
         const required = this.state.document?.fonts ?? [];
