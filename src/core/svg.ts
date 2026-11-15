@@ -126,7 +126,12 @@ export function parseSvg(raw: string): SvgDocument {
         for (const attribute of [...node.attributes]) {
             const name = attribute.name;
             const reference = name === "href" || name === "xlink:href";
-            if (!attributes.has(name) || !safeValue(attribute.value) || (reference && !safeReference(attribute.value, node.localName === "image" || node.localName === "feImage"))) {
+            // Image data is not CSS: Base64 can contain "url" by chance.
+            // Validate references separately while still rejecting external/active content.
+            const safe = reference
+                ? safeReference(attribute.value, node.localName === "image" || node.localName === "feImage")
+                : safeValue(attribute.value);
+            if (!attributes.has(name) || !safe) {
                 warnings.add(`Removed unsupported or external SVG attribute: ${name}`);
                 node.removeAttributeNode(attribute);
             }

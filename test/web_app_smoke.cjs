@@ -30,6 +30,8 @@ async function save(page, fileName) {
     const download = await pending;
     assert.equal(download.suggestedFilename(), fileName);
     await download.saveAs(path.join(work, fileName));
+    // Downloads can finish before history is recorded; new pastes are locked until then.
+    await page.getByText(`Download started: ${fileName}`, { exact: true }).waitFor();
     const bytes = fs.readFileSync(path.join(work, fileName));
     assert.match(bytes.toString("latin1"), /^%PDF-/);
     return bytes;
@@ -62,11 +64,42 @@ async function save(page, fileName) {
         assert.doesNotMatch(raw, /\/Subtype\s*\/Image/);
         await page.screenshot({ path: path.join(work, "vector.png") });
 
+        // PowerPoint wraps raster images in defs/use. Base64 containing "url" is
+        // image data, not a CSS URL expression; neither reference spelling may lose it.
+        const embedded = fs.readFileSync(path.join(root, "test/fixtures/embedded-image.svg"), "utf8");
+        assert.match(embedded, /data:image\/png;base64,[^"]*url/i);
+        for (const input of [embedded, embedded.replaceAll("xlink:href=", "href=")]) {
+            await paste(page, input);
+            await ready(page);
+            const samples = await page.evaluate(async () => {
+                const image = document.querySelector('img[alt="Generated PDF preview"]');
+                await image.decode();
+                const canvas = document.createElement("canvas"); canvas.width = 100; canvas.height = 20;
+                const ctx = canvas.getContext("2d"); ctx.drawImage(image, 0, 0, 100, 20);
+                return { left: [...ctx.getImageData(25, 10, 1, 1).data], right: [...ctx.getImageData(75, 10, 1, 1).data] };
+            });
+            assert.ok(samples.left[0] > 150 && samples.left[1] < 100 && samples.left[2] < 100, JSON.stringify(samples));
+            assert.ok(samples.right[2] > 150 && samples.right[0] < 100 && samples.right[1] < 100, JSON.stringify(samples));
+        }
+        const imagePdf = (await save(page, "embedded-image.pdf")).toString("latin1");
+        assert.match(imagePdf, /\/Subtype\s*\/Image/);
+        assert.match(imagePdf, /\/MediaBox\s*\[\s*0\s+0\s+376\.5\s+53\.25\s*\]/);
+
         // Original source stays intact; scripts, event handlers and external images never execute.
-        const unsafe = svg('<script>globalThis.svgExecuted=true</script><image href="https://invalid.example/image.png" width="10" height="10"/><rect width="192" height="96" fill="#8899aa" onclick="alert(1)"/>');
+        const nested = Buffer.from(svg('<rect width="192" height="96" fill="red"/>')).toString("base64");
+        const unsafe = svg('<script>globalThis.svgExecuted=true</script><rect width="192" height="96" fill="#8899aa" onclick="alert(1)"/>' +
+            '<image href="https://invalid.example/image.png" width="10" height="10"/>' +
+            `<image href="data:image/svg+xml;base64,${nested}" width="192" height="96"/>`);
         await paste(page, unsafe);
         await ready(page);
         assert.equal(await page.evaluate(() => globalThis.svgExecuted), undefined);
+        const safePixel = await page.evaluate(async () => {
+            const image = document.querySelector('img[alt="Generated PDF preview"]'); await image.decode();
+            const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
+            const ctx = canvas.getContext("2d"); ctx.drawImage(image, 0, 0, 1, 1);
+            return [...ctx.getImageData(0, 0, 1, 1).data];
+        });
+        assert.deepEqual(safePixel, [136, 153, 170, 255], "nested SVG data must remain blocked");
         await page.getByRole("button", { name: "View source SVG", exact: true }).click();
         assert.equal(await page.getByLabel("Original SVG source").inputValue(), unsafe);
         await page.getByRole("button", { name: "Close Source SVG" }).click();
@@ -186,6 +219,6 @@ async function save(page, fileName) {
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
         assert.deepEqual(external, [], "single HTML must not request any external resources");
         assert.deepEqual(errors, [], "no uncaught browser errors");
-        console.log("Browser smoke passed: file://, clipboard routes, PDF dimensions/vector/text, fonts, shadow fixture, cancellation, log and mobile layout.");
+        console.log("Browser smoke passed: file://, clipboard routes, embedded PNG references, blocked external/nested content, PDF dimensions/vector/text, fonts, shadow fixture, cancellation, log and mobile layout.");
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
