@@ -16,7 +16,7 @@ if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
     echo "KUROKO_PORT must be an integer from 1 to 65535." >&2
     exit 1
 fi
-echo "Kuroko URL: http://127.0.0.1:$port/"
+echo "kuroko 2 URL: http://127.0.0.1:$port/"
 echo "Press Ctrl+C to stop the server."
 python3 -c '
 import http.server

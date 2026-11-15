@@ -57,7 +57,7 @@ def cargo_notice(package):
                 raise ValueError(f"No license text in {name}-{version} ({license_id}); inspect source before bundling.")
     return f"## {name} {version}\n\nRust / {license_id}\nSource: https://crates.io/crates/{name}/{version}\n\n" + "\n".join(notices)
 
-output = ["# Third-Party Licenses\n\nThese notices accompany the single HTML distribution. Rust entries conservatively include all registry packages in the locked WASM build, including build-time dependencies. Font files selected by users are not distributed with Kuroko.\n"]
+output = ["# Third-Party Licenses\n\nThese notices accompany the single HTML distribution. Rust entries conservatively include all registry packages in the locked WASM build, including build-time dependencies. Font files selected by users are not distributed with kuroko 2.\n"]
 for name in NPM:
     directory = ROOT / "node_modules" / name
     package = json.loads((directory / "package.json").read_text())

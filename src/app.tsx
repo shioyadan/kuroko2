@@ -101,7 +101,7 @@ export function App({ store }: { store: Store }) {
         <input ref={fontInput} type="file" accept=".ttf,.otf,.ttc,.otc" multiple hidden aria-label="Select font files" onChange={event => filesSelected(event.currentTarget)} />
         <input ref={officeInput} type="file" multiple hidden aria-label="Select Office CloudFonts folder" {...{ webkitdirectory: "" }} onChange={event => filesSelected(event.currentTarget, true)} />
         <nav className="toolbar" aria-label="Main toolbar">
-            <span className="brand">Kuroko</span>
+            <span className="brand">kuroko 2</span>
             <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
             <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
             <span className="toolbar-spacer" />
@@ -109,7 +109,7 @@ export function App({ store }: { store: Store }) {
             <button className={`icon-button ${missing.size ? "attention" : ""}`} aria-label="Fonts" title="Fonts" onClick={() => setDialog("fonts")}><BsFonts /></button>
             <button className="icon-button" aria-label="View source SVG" title="View source SVG" disabled={!documentData} onClick={() => setDialog("source")}><BsCodeSlash /></button>
             <button className="icon-button" aria-label="Save history" title="Save history" onClick={() => setDialog("history")}><BsClockHistory /></button>
-            <button className="icon-button" aria-label="About Kuroko" title="About Kuroko" onClick={() => setDialog("about")}><BsInfoCircle /></button>
+            <button className="icon-button" aria-label="About kuroko 2" title="About kuroko 2" onClick={() => setDialog("about")}><BsInfoCircle /></button>
         </nav>
         {(state.error || state.saveFailed) && <div className={`notice ${state.error ? "error" : "save-incomplete"}`} role={state.error ? "alert" : "status"}>
             {state.error || "No file was saved. If you confirmed the save dialog, try downloading the PDF instead."}
@@ -187,8 +187,8 @@ export function App({ store }: { store: Store }) {
             <textarea className="source-text" readOnly value={documentData.raw} aria-label="Original SVG source" />
             <button onClick={() => store.dispatch({ type: "SAVE_SVG" })}>Save SVG</button>
         </Dialog>}
-        {dialog === "about" && <Dialog title="About Kuroko" onClose={() => setDialog(null)}>
-            <h3>Kuroko {__KUROKO_VERSION__}</h3><p>Paste a PowerPoint figure and save a vector PDF.</p>
+        {dialog === "about" && <Dialog title="About kuroko 2" onClose={() => setDialog(null)}>
+            <h3>kuroko 2</h3><p>Version: {__KUROKO_VERSION__}</p><p>Paste a PowerPoint figure and save a vector PDF.</p>
             <p>Build: {__KUROKO_BUILD__}</p>
             <p>Single HTML · React · krilla-svg WASM<br />All conversion runs locally in your browser.</p>
             <p className="help-text">Clipboard access depends on browser permissions and the formats supplied by PowerPoint. Open SVG is available when clipboard access is unavailable.</p>

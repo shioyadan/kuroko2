@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-These notices accompany the single HTML distribution. Rust entries conservatively include all registry packages in the locked WASM build, including build-time dependencies. Font files selected by users are not distributed with Kuroko.
+These notices accompany the single HTML distribution. Rust entries conservatively include all registry packages in the locked WASM build, including build-time dependencies. Font files selected by users are not distributed with kuroko 2.
 
 ## react 19.2.8
 

@@ -1,4 +1,4 @@
-name: Deploy Kuroko Web
+name: Deploy kuroko 2 Web
 
 on:
   push:

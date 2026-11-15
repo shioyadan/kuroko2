@@ -1,8 +1,8 @@
-# Kuroko
+# kuroko 2
 
 [English](README.md) | 日本語
 
-Kuroko は、PowerPoint や Execel でコピーした図を PDF として保存する小さなツールです。
+kuroko 2 は、PowerPoint や Execel でコピーした図を PDF として保存する小さなツールです。
 論文やスライドの図を、LaTeX などで使う PDF にするために利用できます。
 
 - 使い方
@@ -17,9 +17,9 @@ Kuroko は、PowerPoint や Execel でコピーした図を PDF として保存�
 
 ## 使い方
 
-1. Chrome または Edge で [Kuroko](https://shioyadan.github.io/kuroko2/) を開きます。
+1. Chrome または Edge で [kuroko 2](https://shioyadan.github.io/kuroko2/) を開きます。
 2. PowerPoint や Excel で図を選択し、コピーします。
-3. Kuroko に戻り、Ctrl+V（Mac では ⌘V）を押すか、Paste Objects をクリックします。
+3. kuroko 2 に戻り、Ctrl+V（Mac では ⌘V）を押すか、Paste Objects をクリックします。
 4. フォントが不足している場合は、以降で説明する手順で読み込みます。
 5. PDF のプレビューを確認し、Save PDF または Ctrl+S / ⌘S で保存します。
 
@@ -72,4 +72,4 @@ Save history から履歴の削除や、自動提案のオン・オフを切り�
 Copyright (C) 2016–2026 Ryota Shioya
 
 [3-Clause BSD License](LICENSE.md) で公開しています。
-同梱ライブラリのライセンスは [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) とアプリ内の About Kuroko → Licenses に記載しています。Microsoft のフォントは同梱していません。
+同梱ライブラリのライセンスは [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) とアプリ内の About kuroko 2 → Licenses に記載しています。Microsoft のフォントは同梱していません。

@@ -1,8 +1,8 @@
-# Kuroko
+# kuroko 2
 
 English | [日本語](README.ja.md)
 
-Kuroko is a small tool for saving figures copied from PowerPoint or Excel as PDF files.
+kuroko 2 is a small tool for saving figures copied from PowerPoint or Excel as PDF files.
 A typical use is preparing figures for LaTeX papers and presentations.
 
 - Getting started
@@ -17,9 +17,9 @@ A typical use is preparing figures for LaTeX papers and presentations.
 
 ## How to use
 
-1. Open [Kuroko](https://shioyadan.github.io/kuroko2/) in Chrome or Edge.
+1. Open [kuroko 2](https://shioyadan.github.io/kuroko2/) in Chrome or Edge.
 2. Select and copy a figure in PowerPoint or Excel.
-3. Return to Kuroko and press Ctrl+V (⌘V on Mac), or click Paste Objects.
+3. Return to kuroko 2 and press Ctrl+V (⌘V on Mac), or click Paste Objects.
 4. If fonts are missing, load them as described below.
 5. Check the PDF preview, then click Save PDF or press Ctrl+S / ⌘S.
 
@@ -42,7 +42,7 @@ until you close or reload the page; local fonts are loaded again automatically w
 ### Editing and saving similar figures
 
 Save a figure once with your chosen PDF name. When you paste a slightly edited
-version, Kuroko compares it with your recent saves and automatically suggests a
+version, kuroko 2 compares it with your recent saves and automatically suggests a
 name after the PDF is ready. Check the previous and current previews, then choose:
 
 - Overwrite PDF to save to the previously selected file, when the browser can reuse that destination. Nothing is overwritten until you confirm.
@@ -59,7 +59,7 @@ The Save history button lets you forget entries, clear history, or turn off
 automatic suggestions. It remembers up to 30 recent saves made with this feature;
 it does not scan existing PDFs on your computer. Clearing history does not delete
 PDF files. History is specific to the browser and site, and stays on your device.
-In browsers that only download files, Kuroko cannot overwrite an earlier download
+In browsers that only download files, kuroko 2 cannot overwrite an earlier download
 or know whether the download finished; the browser controls duplicate names.
 
 
@@ -86,4 +86,4 @@ Copyright (C) 2016–2026 Ryota Shioya
 
 Released under the [3-Clause BSD License](LICENSE.md).
 Bundled library notices are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) and
-About Kuroko → Licenses in the app. Microsoft fonts are not included.
+About kuroko 2 → Licenses in the app. Microsoft fonts are not included.
