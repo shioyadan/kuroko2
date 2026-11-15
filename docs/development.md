@@ -117,6 +117,12 @@ unsupported browsers retain the manual font controls; enumeration failures do no
 block manual file selection. `test/local_fonts_smoke.cjs` exercises Chromium's
 real font API, including conversion without user activation and PDF text extraction.
 
+The save picker receives the last successfully saved file handle as `startIn`.
+The handle is restored from the latest history entry with a reusable destination.
+It only sets the initial folder; a new destination still requires the picker, and
+overwriting a suggested file still requires confirmation. The stable picker ID
+`kuroko-pdf` supplies the browser's remembered folder when no handle is available.
+
 Save stages appear in the status bar and log. An `AbortError` from the file picker
 means it returned no destination; the app cannot distinguish cancellation from a
 browser rejection. Errors while opening, writing or closing a file are

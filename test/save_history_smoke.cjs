@@ -43,6 +43,7 @@ async function fileBytes(page, name = "diagram.pdf") {
             };
             Object.defineProperty(window, "showSaveFilePicker", { configurable: true, value: async options => {
                 window.pickerCalls++;
+                window.pickerStartIn = options.startIn;
                 const directory = await navigator.storage.getDirectory();
                 return directory.getFileHandle(window.nextSaveName || options.suggestedName, { create: true });
             } });
@@ -107,6 +108,10 @@ async function fileBytes(page, name = "diagram.pdf") {
         await dialog.getByRole("button", { name: "Save as…", exact: true }).click();
         await page.getByText("Saved: alternative.pdf", { exact: true }).waitFor();
         assert.equal(await page.evaluate(() => window.pickerCalls), 1);
+        assert.equal(await page.evaluate(async () => {
+            const file = await (await navigator.storage.getDirectory()).getFileHandle("diagram.pdf");
+            return window.pickerStartIn?.isSameEntry(file);
+        }), true, "Save as starts in the last successfully saved file's folder after a reload");
         assert.deepEqual(await fileBytes(page), second, "Save as must preserve the previous file");
 
         await page.getByRole("button", { name: "Save history", exact: true }).click();
@@ -125,6 +130,20 @@ async function fileBytes(page, name = "diagram.pdf") {
         await dialog.getByRole("radio", { name: /^diagram.pdf/ }).check();
         await dialog.getByText("This will overwrite the previously selected file “diagram.pdf”.", { exact: true }).waitFor();
         await dialog.getByRole("button", { name: "Not now", exact: true }).click();
+
+        // The latest successful save, not the selected candidate, supplies the next initial folder.
+        await page.getByLabel("PDF file name", { exact: true }).fill("fresh-name.pdf");
+        await page.evaluate(() => { window.nextSaveName = undefined; });
+        await page.getByRole("button", { name: /^Save PDF/ }).click();
+        await page.getByText("Saved: fresh-name.pdf", { exact: true }).waitFor();
+        assert.equal(await page.evaluate(async () => {
+            const file = await (await navigator.storage.getDirectory()).getFileHandle("alternative.pdf");
+            return window.pickerStartIn?.isSameEntry(file);
+        }), true, "normal saves restore the last destination from persisted history");
+        await page.getByRole("button", { name: "Save history", exact: true }).click();
+        await history.getByRole("button", { name: "Forget fresh-name.pdf", exact: true }).click();
+        await history.getByRole("button", { name: "Forget fresh-name.pdf", exact: true }).waitFor({ state: "detached" });
+        await history.getByRole("button", { name: "Close Save history", exact: true }).click();
 
         await paste(page, unrelated);
         assert.equal(await dialog.count(), 0, "unrelated figures should not be suggested");

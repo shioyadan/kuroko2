@@ -6,7 +6,7 @@ export interface SaveHandle {
     isSameEntry?(other: SaveHandle): Promise<boolean>;
 }
 export interface SaveResult { name: string; downloaded: boolean; handle?: SaveHandle; }
-type SavePicker = (options: { id: string; suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<SaveHandle>;
+type SavePicker = (options: { id: string; startIn?: SaveHandle; suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<SaveHandle>;
 
 export function downloadBlob(blob: Blob, name: string): void {
     const url = URL.createObjectURL(blob);
@@ -18,7 +18,7 @@ export function downloadBlob(blob: Blob, name: string): void {
 export function pdfFileName(name: string): string {
     return (name.trim().replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/\.pdf$/i, "") || "figure") + ".pdf";
 }
-export async function savePdf(bytes: Uint8Array<ArrayBuffer>, name: string, previous?: SaveHandle, options: { onProgress?: (status: string) => void; downloadOnly?: boolean } = {}): Promise<SaveResult> {
+export async function savePdf(bytes: Uint8Array<ArrayBuffer>, name: string, previous?: SaveHandle, options: { onProgress?: (status: string) => void; downloadOnly?: boolean; startIn?: SaveHandle } = {}): Promise<SaveResult> {
     const onProgress = options.onProgress ?? (() => {});
     const blob = new Blob([bytes], { type: "application/pdf" });
     const picker = (window as Window & { showSaveFilePicker?: SavePicker }).showSaveFilePicker;
@@ -36,9 +36,12 @@ export async function savePdf(bytes: Uint8Array<ArrayBuffer>, name: string, prev
         if (previous?.requestPermission && await previous.requestPermission({ mode: "readwrite" }) !== "granted") {
             throw new Error("Write access was not granted. Use Save as… to choose a destination.");
         }
-        // Chrome remembers the last directory for this picker ID, independently of SVG/font pickers.
-        // It also remembers a selected directory when the subsequent write fails.
-        const handle = previous ?? await picker!.call(window, { id: "kuroko-pdf", suggestedName: name, types: [{ description: "PDF document", accept: { "application/pdf": [".pdf"] } }] });
+        // A file handle starts the picker in that file's parent directory. It takes
+        // precedence over the picker's remembered directory, including after an overwrite.
+        const handle = previous ?? await picker!.call(window, {
+            id: "kuroko-pdf", ...(options.startIn ? { startIn: options.startIn } : {}), suggestedName: name,
+            types: [{ description: "PDF document", accept: { "application/pdf": [".pdf"] } }]
+        });
         stage = "opening the file for writing";
         onProgress(`Opening destination: ${handle.name}`);
         stream = await handle.createWritable();

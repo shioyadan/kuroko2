@@ -37,7 +37,10 @@ test("corrupt history does not become a candidate or an executable thumbnail", (
 test("confirmed destinations bypass the picker; denied permission never opens a writer", async () => {
     const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
     let pickerCalls = 0, writes = 0, closes = 0, aborts = 0;
-    Object.defineProperty(globalThis, "window", { configurable: true, value: { showSaveFilePicker: async () => { pickerCalls++; return handle; } } });
+    let startIn: SaveHandle | undefined;
+    Object.defineProperty(globalThis, "window", { configurable: true, value: { showSaveFilePicker: async (options: { id: string; startIn?: SaveHandle }) => {
+        assert.equal(options.id, "kuroko-pdf"); startIn = options.startIn; pickerCalls++; return handle;
+    } } });
     let permission: PermissionState = "granted";
     let fail = false;
     const handle: SaveHandle = {
@@ -58,8 +61,9 @@ test("confirmed destinations bypass the picker; denied permission never opens a 
         await assert.rejects(savePdf(bytes, "same.pdf", handle), /disk full/);
         assert.equal(aborts, 1); assert.equal(closes, 1);
         fail = false;
-        await savePdf(bytes, "new.pdf");
+        await savePdf(bytes, "new.pdf", undefined, { startIn: handle });
         assert.equal(pickerCalls, 1);
+        assert.equal(startIn, handle, "the previous file supplies only the picker's initial folder");
     } finally {
         if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
         else Reflect.deleteProperty(globalThis, "window");

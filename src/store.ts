@@ -6,7 +6,7 @@ import { convertSvg } from "./core/convert";
 import { FontRegistry, parseFont } from "./core/fonts";
 import { renderPdf } from "./core/pdf_preview";
 import { fontLabel, normalizeFontFamily, parseSvg, type FontRequirement, type SvgDocument } from "./core/svg";
-import { downloadBlob, pdfFileName, savePdf, type SaveResult } from "./file_access";
+import { downloadBlob, pdfFileName, savePdf, type SaveHandle, type SaveResult } from "./file_access";
 import { describeFigure, matchingFigures, type FigureMemory } from "./core/figure_match";
 import { loadSaveHistory, putSavedFigure, removeSavedFigures, saveHistoryId, MAX_SAVE_HISTORY, type SavedFigure } from "./save_history";
 
@@ -75,9 +75,13 @@ export class Store {
     private promptForDocument = false;
     private readonly historyReady: Promise<void>;
     private historyQueue: Promise<void> = Promise.resolve();
+    private lastSaveHandle: SaveHandle | undefined;
     constructor() {
         try { this.state = { ...this.state, suggestNames: localStorage.getItem("kuroko.suggestNames") !== "false" }; } catch {}
-        this.historyReady = loadSaveHistory().then(history => this.publish({ history }), error => this.historyError(error));
+        this.historyReady = loadSaveHistory().then(history => {
+            this.lastSaveHandle = history.find(record => record.handle)?.handle;
+            this.publish({ history });
+        }, error => this.historyError(error));
     }
     private historyError(error: unknown): void {
         if (this.state.historyPersistent) console.warn(`Save history is available for this session only: ${message(error)}`);
@@ -221,8 +225,9 @@ export class Store {
         this.publish({ saving: true, saveFailed: false, error: "", suggestionOpen: false, fileName: name });
         // Start file access in the confirmation click's call stack; no history I/O before it.
         void savePdf(this.state.pdf, name, reuse ? record?.handle : undefined, {
-            downloadOnly, onProgress: status => this.dispatch({ type: "SAVE_PROGRESS", status })
+            downloadOnly, startIn: this.lastSaveHandle, onProgress: status => this.dispatch({ type: "SAVE_PROGRESS", status })
         }).then(async result => {
+            if (result.handle) this.lastSaveHandle = result.handle;
             console.info(`${result.downloaded ? "Download handed to the browser" : "PDF file written"}: ${result.name}`);
             if (memory) {
                 this.dispatch({ type: "SAVE_PROGRESS", status: "Updating save history…" });

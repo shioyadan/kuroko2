@@ -50,7 +50,9 @@ name after the PDF is ready. Check the previous and current previews, then choos
 - Save with this name when the previous destination is unavailable. The browser opens a save dialog or downloads a new copy.
 - Save as… to choose a different name or destination, or Not now to continue without saving.
 
-The Previously saved preview is stored
+In Chrome and Edge, the save dialog starts in the folder of the last successfully
+saved PDF, including after a reload when that destination is in your history.
+No separate folder selection is needed. The Previously saved preview is stored
 at up to 1200×900 pixels; older history entries gain the improved resolution when
 you save them again.
 
