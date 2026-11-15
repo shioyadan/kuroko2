@@ -23,7 +23,8 @@ A typical use is preparing figures for LaTeX papers and presentations.
 4. If fonts are missing, load them as described below.
 5. Check the PDF preview, then click Save PDF or press Ctrl+S / ⌘S.
 
-You can open an SVG file directly or drag it into the window.
+You can open an SVG file directly or drag it into the window. The menu (☰) at the
+top right contains Open SVG, Fonts, View source SVG, Save history and About kuroko 2.
 
 
 ### Loading fonts
@@ -32,8 +33,7 @@ The fonts needed by your figure are loaded automatically when you paste it. On
 first use, allow the browser to access your fonts if asked. Granted fonts are also
 loaded automatically after a page reload.
 
-If fonts are still needed, click Add fonts… next to their names. The Fonts button
-in the toolbar opens the same guide.
+If fonts are still needed, click Add fonts… next to their names. Menu → Fonts opens the same guide.
 
 - If permission is needed, click Allow font access. If access is blocked or unavailable, the guide offers folder selection.
 - Click Choose font folder… to find the missing fonts in that folder and its subfolders. For Office fonts such as Aptos, select the `CloudFonts` folder under `%LOCALAPPDATA%\Microsoft\FontCache`. Other installed fonts are usually in `C:\Windows\Fonts`.
@@ -64,7 +64,7 @@ No separate folder selection is needed. The Previously saved preview is stored
 at up to 1200×900 pixels; older history entries gain the improved resolution when
 you save them again.
 
-The Save history button lets you forget entries, clear history, or turn off
+Menu → Save history lets you forget entries, clear history, or turn off
 automatic suggestions. It remembers up to 30 recent saves made with this feature;
 it does not scan existing PDFs on your computer. Clearing history does not delete
 PDF files. History is specific to the browser and site, and stays on your device.
@@ -95,4 +95,4 @@ Copyright (C) 2016–2026 Ryota Shioya
 
 Released under the [3-Clause BSD License](LICENSE.md).
 Bundled library notices are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) and
-About kuroko 2 → Licenses in the app. Microsoft fonts are not included.
+Menu → About kuroko 2 → Licenses in the app. Microsoft fonts are not included.

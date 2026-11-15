@@ -60,6 +60,7 @@ async function fileBytes(page, name = "diagram.pdf") {
         await page.getByRole("button", { name: /^Save PDF/ }).click();
         await page.getByRole("alert").filter({ hasText: "finalizing the file: AbortError" }).waitFor();
         await page.getByText("PDF was not saved.", { exact: true }).waitFor();
+        await page.getByLabel("Application menu", { exact: true }).click();
         await page.getByRole("button", { name: "Save history", exact: true }).click();
         await page.getByText("No saved figures yet. Save a PDF to start building your history.").waitFor();
         await page.getByRole("button", { name: "Close Save history", exact: true }).click();
@@ -114,12 +115,14 @@ async function fileBytes(page, name = "diagram.pdf") {
         }), true, "Save as starts in the last successfully saved file's folder after a reload");
         assert.deepEqual(await fileBytes(page), second, "Save as must preserve the previous file");
 
+        await page.getByLabel("Application menu", { exact: true }).click();
         await page.getByRole("button", { name: "Save history", exact: true }).click();
         const history = page.getByRole("dialog", { name: "Save history", exact: true });
         await history.getByLabel("Suggest file names after conversion").uncheck();
         await page.reload();
         await paste(page, edited);
         assert.equal(await dialog.count(), 0, "disabled suggestions must stay disabled after reload");
+        await page.getByLabel("Application menu", { exact: true }).click();
         await page.getByRole("button", { name: "Save history", exact: true }).click();
         assert.equal(await history.getByLabel("Suggest file names after conversion").isChecked(), false);
         await history.getByLabel("Suggest file names after conversion").check();
@@ -140,6 +143,7 @@ async function fileBytes(page, name = "diagram.pdf") {
             const file = await (await navigator.storage.getDirectory()).getFileHandle("alternative.pdf");
             return window.pickerStartIn?.isSameEntry(file);
         }), true, "normal saves restore the last destination from persisted history");
+        await page.getByLabel("Application menu", { exact: true }).click();
         await page.getByRole("button", { name: "Save history", exact: true }).click();
         await history.getByRole("button", { name: "Forget fresh-name.pdf", exact: true }).click();
         await history.getByRole("button", { name: "Forget fresh-name.pdf", exact: true }).waitFor({ state: "detached" });
@@ -147,6 +151,7 @@ async function fileBytes(page, name = "diagram.pdf") {
 
         await paste(page, unrelated);
         assert.equal(await dialog.count(), 0, "unrelated figures should not be suggested");
+        await page.getByLabel("Application menu", { exact: true }).click();
         await page.getByRole("button", { name: "Save history", exact: true }).click();
         assert.equal(await history.locator("li").count(), 2);
         await history.getByRole("button", { name: "Forget alternative.pdf", exact: true }).click();
@@ -199,6 +204,7 @@ async function fileBytes(page, name = "diagram.pdf") {
         assert.equal(await downloaded.failure(), null);
         assert.match(fs.readFileSync(await downloaded.path()).toString("latin1"), /^%PDF-/);
         await httpPage.getByText("Download started: http.pdf", { exact: true }).waitFor();
+        await httpPage.getByLabel("Application menu", { exact: true }).click();
         await httpPage.getByRole("button", { name: "Save history", exact: true }).click();
         await httpPage.getByRole("dialog", { name: "Save history", exact: true }).getByText("http.pdf", { exact: true }).waitFor();
         await httpPage.reload();

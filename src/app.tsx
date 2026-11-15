@@ -5,6 +5,7 @@ import { fontKey, fontLabel } from "./core/svg";
 import { LogPane, type LogEntry, type LogLevel } from "./components/log_pane";
 import { SaveSuggestion } from "./components/save_suggestion";
 import { FontSetup } from "./components/font_setup";
+import { ApplicationMenu } from "./components/application_menu";
 
 function editable(target: EventTarget | null): boolean {
     return target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input,textarea,select"));
@@ -117,11 +118,13 @@ export function App({ store }: { store: Store }) {
             <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
             <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
             <span className="toolbar-spacer" />
-            <button className="icon-button" aria-label="Open SVG" title="Open SVG" onClick={() => svgInput.current?.click()}><BsFolder2Open /></button>
-            <button className={`icon-button ${missing.size ? "attention" : ""}`} aria-label="Fonts" title="Fonts" onClick={openFonts}><BsFonts /></button>
-            <button className="icon-button" aria-label="View source SVG" title="View source SVG" disabled={!documentData} onClick={() => setDialog("source")}><BsCodeSlash /></button>
-            <button className="icon-button" aria-label="Save history" title="Save history" onClick={() => setDialog("history")}><BsClockHistory /></button>
-            <button className="icon-button" aria-label="About kuroko 2" title="About kuroko 2" onClick={() => setDialog("about")}><BsInfoCircle /></button>
+            <ApplicationMenu>
+                <button aria-label="Open SVG" onClick={() => svgInput.current?.click()}><BsFolder2Open aria-hidden="true" />Open SVG…</button>
+                <button className={missing.size ? "attention" : ""} onClick={openFonts}><BsFonts aria-hidden="true" />Fonts</button>
+                <button disabled={!documentData} onClick={() => setDialog("source")}><BsCodeSlash aria-hidden="true" />View source SVG</button>
+                <button onClick={() => setDialog("history")}><BsClockHistory aria-hidden="true" />Save history</button>
+                <button onClick={() => setDialog("about")}><BsInfoCircle aria-hidden="true" />About kuroko 2</button>
+            </ApplicationMenu>
         </nav>
         {(state.error || state.saveFailed) && <div className={`notice ${state.error ? "error" : "save-incomplete"}`} role={state.error ? "alert" : "status"}>
             {state.error || "No file was saved. If you confirmed the save dialog, try downloading the PDF instead."}

@@ -96,6 +96,7 @@ async function ready(page) {
         await guide.waitFor({ state: "detached" });
         const matching = page.getByRole("dialog", { name: "Save matching figure", exact: true });
         if (await matching.count()) await matching.getByRole("button", { name: "Not now", exact: true }).click();
+        await page.getByLabel("Application menu", { exact: true }).click();
         await page.getByRole("button", { name: "Fonts", exact: true }).click();
         await guide.getByText("All fonts for this figure are ready.", { exact: true }).waitFor();
         await guide.getByRole("button", { name: "Close Fonts", exact: true }).click();
@@ -171,6 +172,7 @@ async function ready(page) {
         await firstUse.evaluate(() => { window.queryLocalFonts = undefined; });
         await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
         await firstUse.getByText("Fonts needed for PDF", { exact: true }).waitFor();
+        await firstUse.getByLabel("Application menu", { exact: true }).click();
         await firstUse.getByRole("button", { name: "Fonts", exact: true }).click();
         await setup.getByText(/This browser cannot load installed fonts automatically/).waitFor();
         await firstUse.setViewportSize({ width: 390, height: 700 });

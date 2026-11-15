@@ -58,7 +58,27 @@ async function save(page, fileName) {
         assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false);
         await page.screenshot({ path: path.join(work, "empty.png") });
 
-        await paste(page, shapes);
+        // The disclosure menu supports the keyboard and preserves file-picker activation.
+        const menuButton = page.getByLabel("Application menu", { exact: true });
+        const menu = page.locator(".application-menu");
+        assert.equal(await page.getByRole("button", { name: "Save history", exact: true }).count(), 0);
+        await menuButton.focus();
+        await page.keyboard.press("Enter");
+        await page.keyboard.press("Tab");
+        assert.equal(await page.getByRole("button", { name: "Open SVG", exact: true }).evaluate(button => button === document.activeElement), true);
+        assert.equal(await page.getByRole("button", { name: "View source SVG", exact: true }).isEnabled(), false);
+        await page.screenshot({ path: path.join(work, "application-menu.png") });
+        await page.keyboard.press("Escape");
+        assert.equal(await menu.evaluate(element => element.open), false);
+        assert.equal(await menuButton.evaluate(button => button === document.activeElement), true);
+        await menuButton.click();
+        await page.getByRole("heading", { name: "PowerPoint → PDF" }).click();
+        assert.equal(await menu.evaluate(element => element.open), false);
+        await menuButton.click();
+        const openFile = page.waitForEvent("filechooser");
+        await page.getByRole("button", { name: "Open SVG", exact: true }).click();
+        await (await openFile).setFiles({ name: "figure.svg", mimeType: "image/svg+xml", buffer: Buffer.from(shapes) });
+        assert.equal(await menu.evaluate(element => element.open), false);
         await ready(page);
         const bytes = await save(page, "vector.pdf");
         const raw = bytes.toString("latin1");
@@ -102,6 +122,7 @@ async function save(page, fileName) {
             return [...ctx.getImageData(0, 0, 1, 1).data];
         });
         assert.deepEqual(safePixel, [136, 153, 170, 255], "nested SVG data must remain blocked");
+        await page.getByLabel("Application menu", { exact: true }).click();
         await page.getByRole("button", { name: "View source SVG", exact: true }).click();
         assert.equal(await page.getByLabel("Original SVG source").inputValue(), unsafe);
         await page.getByRole("button", { name: "Close Source SVG" }).click();
