@@ -12,6 +12,7 @@ export interface FigureMemory {
 }
 const SHAPES = ["path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "image", "use"];
 const GRID = 32;
+export const MAX_THUMBNAIL_LENGTH = 2_000_000;
 
 // Ignore the white background, so two unrelated sparse figures do not match just
 // because most of their pages are white. Compare layout rather than exact SVG IDs.
@@ -55,12 +56,17 @@ export async function describeFigure(svg: SvgDocument, preview: string): Promise
     const ink = Array.from({ length: GRID * GRID }, (_, i) => Math.min(255, Math.round((255 - Math.min(...pixels.slice(i * 4, i * 4 + 3))) * 2)));
     const root = new DOMParser().parseFromString(svg.sanitized, SVG_MIME);
     const shapes = SHAPES.map(tag => [...root.querySelectorAll(tag)].filter(node => !node.closest("defs,clipPath,mask,filter,pattern,marker")).length);
-    const scale = Math.min(240 / image.naturalWidth, 150 / image.naturalHeight);
-    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-    ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const thumbnail = canvas.toDataURL("image/png");
+    let scale = Math.min(1, 1200 / image.naturalWidth, 900 / image.naturalHeight);
+    let thumbnail: string;
+    do {
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        ctx.imageSmoothingQuality = "high";
+        ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        thumbnail = canvas.toDataURL("image/png");
+        scale *= 0.75; // Bound storage even for photographs or noisy embedded images.
+    } while (thumbnail.length >= MAX_THUMBNAIL_LENGTH);
     canvas.width = canvas.height = 0;
     return { fingerprint: { version: 1, aspect: svg.width / svg.height, ink, shapes }, thumbnail };
 }

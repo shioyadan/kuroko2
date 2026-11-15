@@ -37,7 +37,7 @@ The PDF uses the original font files to preserve your figure's typefaces.
 
 PDF creation resumes automatically when the missing fonts are loaded. While the preview says
 “SVG preview · PDF pending,” the PDF is not ready yet. Loaded figures and fonts are kept only
-until you close or reload the page; local fonts are loaded again automatically while access remains allowed. Manually selected font files and Office CloudFonts folders need to be selected again after a reload. Save history separately remembers names, small previews and save destinations on this device.
+until you close or reload the page; local fonts are loaded again automatically while access remains allowed. Manually selected font files and Office CloudFonts folders need to be selected again after a reload. Save history separately remembers names, previews and save destinations on this device.
 
 
 ### Editing and saving similar figures
@@ -49,6 +49,10 @@ name after the PDF is ready. Check the previous and current previews, then choos
 - Overwrite PDF to save to the previously selected file, when the browser can reuse that destination. Nothing is overwritten until you confirm.
 - Save with this name when the previous destination is unavailable. The browser opens a save dialog or downloads a new copy.
 - Save as… to choose a different name or destination, or Not now to continue without saving.
+
+The Previously saved preview is stored
+at up to 1200×900 pixels; older history entries gain the improved resolution when
+you save them again.
 
 The Save history button lets you forget entries, clear history, or turn off
 automatic suggestions. It remembers up to 30 recent saves made with this feature;

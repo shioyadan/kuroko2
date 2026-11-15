@@ -100,7 +100,9 @@ gradients. PDF.js is a development dependency used only for independent text
 extraction tests.
 
 Successful saves (or started downloads) add up to 30 history entries with a
-32×32 ink descriptor, shape counts, a thumbnail up to 240×150 and the file name. Native
+32×32 ink descriptor, shape counts, a PNG preview up to 1200×900 and the file name.
+Previews exceeding two million data-URL characters are downscaled to bound storage;
+older, smaller previews remain compatible and update on the next save. Native
 save handles are persisted where supported. Complete SVG/PDF/font contents are
 not retained. The similarity threshold gates suggestions; it is a heuristic, not
 a probability, and matching never authorizes a write. A separate confirmation

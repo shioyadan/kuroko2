@@ -76,6 +76,13 @@ async function fileBytes(page, name = "diagram.pdf") {
         const dialog = page.getByRole("dialog", { name: "Save matching figure", exact: true });
         await dialog.waitFor();
         assert.equal(await dialog.getByText("diagram.pdf", { exact: true }).count(), 1);
+        const previousPreview = await dialog.getByAltText("Previously saved figure", { exact: true }).evaluate(async image => {
+            await image.decode();
+            return { width: image.naturalWidth, height: image.naturalHeight, length: image.src.length };
+        });
+        assert.equal(previousPreview.width, 1200);
+        assert.equal(previousPreview.height, 600);
+        assert.ok(previousPreview.length < 2_000_000);
         assert.deepEqual(await fileBytes(page), first, "nothing is overwritten before confirmation");
         assert.equal(await page.evaluate(() => window.pickerCalls), 0);
         fs.mkdirSync(path.join(root, "work"), { recursive: true });

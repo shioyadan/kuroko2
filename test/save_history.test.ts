@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { figureSimilarity, matchingFigures, validFingerprint, type FigureFingerprint } from "../src/core/figure_match";
+import { MAX_THUMBNAIL_LENGTH, figureSimilarity, matchingFigures, validFingerprint, type FigureFingerprint } from "../src/core/figure_match";
 import { validSavedFigure } from "../src/save_history";
 import { savePdf, type SaveHandle } from "../src/file_access";
 
@@ -29,6 +29,8 @@ test("corrupt history does not become a candidate or an executable thumbnail", (
     assert.equal(validFingerprint({ ...f, ink: [NaN] }), false);
     const record = { id: "1", name: "a.pdf", savedAt: 1, fingerprint: f, thumbnail: "data:image/png;base64,AAAA" };
     assert.equal(validSavedFigure(record), true);
+    assert.equal(validSavedFigure({ ...record, thumbnail: "data:image/png;base64," + "A".repeat(400000) }), true);
+    assert.equal(validSavedFigure({ ...record, thumbnail: "data:image/png;base64," + "A".repeat(MAX_THUMBNAIL_LENGTH) }), false);
     assert.equal(validSavedFigure({ ...record, thumbnail: "data:image/svg+xml,<svg/>" }), false);
     assert.equal(validSavedFigure({ ...record, handle: {} }), false);
 });
