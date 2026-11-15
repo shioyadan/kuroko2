@@ -44,6 +44,8 @@ async function save(page, fileName) {
         const context = await browser.newContext({ viewport: { width: 1150, height: 800 }, acceptDownloads: true });
         await context.addInitScript(() => {
             Object.defineProperty(window, "showSaveFilePicker", { value: undefined, configurable: true });
+            // This suite covers the file fallback; local_fonts_smoke exercises the real API.
+            Object.defineProperty(window, "queryLocalFonts", { value: undefined, configurable: true });
         });
         const external = [];
         await context.route(/^https?:/, route => { external.push(route.request().url()); return route.abort(); });

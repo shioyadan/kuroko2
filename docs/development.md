@@ -111,10 +111,15 @@ locked against new input until its result is recorded. Storage failures retain
 session-only history without blocking PDF saving.
 
 When a figure needs fonts, the store checks the `local-fonts` permission and
-automatically enumerates local fonts only if access is already granted. It reuses
-the catalog within the session and restores access after a reload. First use and
-unsupported browsers retain the manual font controls; enumeration failures do not
-block manual file selection. `test/local_fonts_smoke.cjs` exercises Chromium's
+automatically enumerates installed fonts. First use can request permission while
+the paste/open gesture is still active; a dismissed prompt is not repeated
+automatically during the session. Granted access needs no gesture. Concurrent
+queries share one enumeration, and cancelled conversions cannot start a prompt.
+The Add fonts… notice and Fonts toolbar button open the same setup guide:
+permission when needed, then folder selection for remaining fonts, with an
+individual-file fallback. File selection never triggers a new permission prompt.
+The catalog and selected folders are reused for the session; only the permission
+survives reload. `test/local_fonts_smoke.cjs` covers the setup flow and Chromium's
 real font API, including conversion without user activation and PDF text extraction.
 
 The save picker receives the last successfully saved file handle as `startIn`.

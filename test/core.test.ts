@@ -57,29 +57,43 @@ test("real font metadata and glyph coverage, TTC faces and deduplication", async
     assert.equal(parseFont(ttc, "font.ttc").faces[0].family, "DejaVu Sans");
 });
 
-test("automatic local font access only queries a granted permission and reuses its catalog", async () => {
+test("font access prompts once per session, respects gestures and denial, and reuses a granted catalog", async () => {
     const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
     const queryDescriptor = Object.getOwnPropertyDescriptor(globalThis, "queryLocalFonts");
-    let state: PermissionState = "prompt", queries = 0, unsupported = false;
-    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { permissions: { query: async ({ name }: PermissionDescriptor) => {
+    let state: PermissionState = "prompt", queries = 0, gesture = false, allow = false;
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { userActivation: { get isActive() { return gesture; } }, permissions: { query: async ({ name }: PermissionDescriptor) => {
         assert.equal(name, "local-fonts");
-        if (unsupported) throw new TypeError("Unknown permission");
         return { state };
     } } } });
-    Object.defineProperty(globalThis, "queryLocalFonts", { configurable: true, value: async () => { queries++; return []; } });
+    Object.defineProperty(globalThis, "queryLocalFonts", { configurable: true, value: async () => { queries++; if (allow) state = "granted"; return []; } });
     try {
         const registry = new FontRegistry();
-        await registry.queryLocalIfGranted();
+        assert.equal(await registry.ensureLocal(), "permission");
+        assert.equal(queries, 0, "no permission prompt without a live gesture");
+        gesture = true;
+        assert.equal(await registry.ensureLocal("never"), "permission");
+        assert.equal(queries, 0, "manual file selection must not trigger another prompt");
+        assert.equal(await registry.ensureLocal(), "permission");
+        assert.equal(queries, 1, "first paste can request permission");
+        assert.equal(await registry.ensureLocal(), "permission");
+        assert.equal(queries, 1, "dismissed permission prompts must not recur on every paste");
+        assert.equal(await registry.ensureLocal("explicit"), "permission");
+        assert.equal(queries, 2, "the setup button can retry a dismissed prompt");
         state = "denied";
-        await registry.queryLocalIfGranted();
-        assert.equal(queries, 0, "automatic conversion must not request permission");
-        state = "granted"; unsupported = true;
-        await registry.queryLocalIfGranted();
-        assert.equal(queries, 0);
-        unsupported = false;
-        await registry.queryLocalIfGranted();
-        await registry.queryLocalIfGranted();
-        assert.equal(queries, 1, "a loaded catalog is reused for later figures");
+        assert.equal(await registry.ensureLocal("explicit"), "denied");
+        assert.equal(queries, 2);
+        state = "prompt"; allow = true;
+        await Promise.all([registry.ensureLocal("explicit"), registry.ensureLocal("explicit")]);
+        assert.equal(queries, 3, "concurrent requests share a single enumeration");
+        assert.equal(await registry.ensureLocal(), "ready");
+        assert.equal(queries, 3, "a loaded catalog is reused for later figures");
+        gesture = false;
+        assert.equal(await new FontRegistry().ensureLocal(), "ready");
+        assert.equal(queries, 4, "granted access works without a gesture after reload");
+        assert.equal(await new FontRegistry().ensureLocal("automatic", () => false), "unknown");
+        assert.equal(queries, 4, "cancelled conversions cannot request fonts");
+        Object.defineProperty(globalThis, "queryLocalFonts", { configurable: true, value: undefined });
+        assert.equal(await new FontRegistry().ensureLocal(), "unsupported");
     } finally {
         if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
         else Reflect.deleteProperty(globalThis, "navigator");

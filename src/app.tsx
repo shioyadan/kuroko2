@@ -4,6 +4,7 @@ import { Store } from "./store";
 import { fontKey, fontLabel } from "./core/svg";
 import { LogPane, type LogEntry, type LogLevel } from "./components/log_pane";
 import { SaveSuggestion } from "./components/save_suggestion";
+import { FontSetup } from "./components/font_setup";
 
 function editable(target: EventTarget | null): boolean {
     return target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input,textarea,select"));
@@ -21,7 +22,8 @@ export function App({ store }: { store: Store }) {
     const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const svgInput = useRef<HTMLInputElement>(null);
     const fontInput = useRef<HTMLInputElement>(null);
-    const officeInput = useRef<HTMLInputElement>(null);
+    const fontFolderInput = useRef<HTMLInputElement>(null);
+    const closeFontsWhenReady = useRef(false);
     const previewArea = useRef<HTMLDivElement>(null);
     const [available, setAvailable] = useState({ width: 800, height: 600 });
     const [dialog, setDialog] = useState<"fonts" | "source" | "about" | "history" | null>(null);
@@ -32,6 +34,12 @@ export function App({ store }: { store: Store }) {
     const [warning, setWarning] = useState(false);
     const logOpenRef = useRef(false);
     const logID = useRef(0);
+    useEffect(() => {
+        if (dialog === "fonts" && closeFontsWhenReady.current && state.pdf && !state.busy) {
+            closeFontsWhenReady.current = false;
+            setDialog(null);
+        }
+    }, [dialog, state.pdf, state.busy]);
     useEffect(() => {
         const observer = new ResizeObserver(entries => {
             const rect = entries[0].contentRect;
@@ -80,6 +88,10 @@ export function App({ store }: { store: Store }) {
     const zoom = state.zoom === "fit" ? Math.max(0.02, Math.min((available.width - 64) / pageWidth, (available.height - 64) / pageHeight)) : state.zoom;
     const svgPreview = documentData ? "data:image/svg+xml;charset=utf-8," + encodeURIComponent(documentData.sanitized) : "";
     const missing = new Set(state.missingFonts.map(fontKey));
+    const openFonts = () => {
+        closeFontsWhenReady.current = missing.size > 0;
+        setDialog("fonts");
+    };
     const filesSelected = (input: HTMLInputElement, directory = false) => {
         store.dispatch({ type: "ADD_FONTS", files: [...(input.files ?? [])], directory }); input.value = "";
     };
@@ -99,14 +111,14 @@ export function App({ store }: { store: Store }) {
             const file = event.currentTarget.files?.[0]; if (file) store.dispatch({ type: "OPEN_SVG", file }); event.currentTarget.value = "";
         }} />
         <input ref={fontInput} type="file" accept=".ttf,.otf,.ttc,.otc" multiple hidden aria-label="Select font files" onChange={event => filesSelected(event.currentTarget)} />
-        <input ref={officeInput} type="file" multiple hidden aria-label="Select Office CloudFonts folder" {...{ webkitdirectory: "" }} onChange={event => filesSelected(event.currentTarget, true)} />
+        <input ref={fontFolderInput} type="file" multiple hidden aria-label="Select font folder" {...{ webkitdirectory: "" }} onChange={event => filesSelected(event.currentTarget, true)} />
         <nav className="toolbar" aria-label="Main toolbar">
             <span className="brand">kuroko 2</span>
             <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
             <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
             <span className="toolbar-spacer" />
             <button className="icon-button" aria-label="Open SVG" title="Open SVG" onClick={() => svgInput.current?.click()}><BsFolder2Open /></button>
-            <button className={`icon-button ${missing.size ? "attention" : ""}`} aria-label="Fonts" title="Fonts" onClick={() => setDialog("fonts")}><BsFonts /></button>
+            <button className={`icon-button ${missing.size ? "attention" : ""}`} aria-label="Fonts" title="Fonts" onClick={openFonts}><BsFonts /></button>
             <button className="icon-button" aria-label="View source SVG" title="View source SVG" disabled={!documentData} onClick={() => setDialog("source")}><BsCodeSlash /></button>
             <button className="icon-button" aria-label="Save history" title="Save history" onClick={() => setDialog("history")}><BsClockHistory /></button>
             <button className="icon-button" aria-label="About kuroko 2" title="About kuroko 2" onClick={() => setDialog("about")}><BsInfoCircle /></button>
@@ -115,11 +127,9 @@ export function App({ store }: { store: Store }) {
             {state.error || "No file was saved. If you confirmed the save dialog, try downloading the PDF instead."}
             {state.saveFailed && state.pdf && <button className="save-fallback" disabled={state.busy || state.saving} onClick={() => store.dispatch({ type: "DOWNLOAD_PDF" })}>Download PDF instead</button>}
         </div>}
-        {missing.size > 0 && <div className="notice font-notice">
+        {missing.size > 0 && !state.busy && <div className="notice font-notice">
             <span><strong>Fonts needed for PDF</strong><br />{state.missingFonts.map(fontLabel).join(", ")}</span>
-            <button disabled={state.busy} onClick={() => store.dispatch({ type: "LOCAL_FONTS" })}>Use Local Fonts</button>
-            <button disabled={state.busy} onClick={() => fontInput.current?.click()}>Select Font Files…</button>
-            <button onClick={() => setDialog("fonts")}>More…</button>
+            <button onClick={openFonts}>Add fonts…</button>
         </div>}
         <main ref={previewArea} className={`preview-area ${dragging ? "dragging" : ""}`} aria-label="Figure preview" aria-busy={state.busy}>
             {!documentData ? <div className="empty-state">
@@ -169,18 +179,8 @@ export function App({ store }: { store: Store }) {
             <p className="help-text">Forgetting history does not delete PDF files.</p>
         </Dialog>}
         {dialog === "fonts" && <Dialog title="Fonts" onClose={() => setDialog(null)}>
-            <p>PDF export uses the original font files. Once local font access is allowed, the fonts needed by each figure load automatically, including after a reload.</p>
-            <div className="dialog-actions">
-                <button disabled={state.busy} onClick={() => store.dispatch({ type: "LOCAL_FONTS" })}>Use Local Fonts</button>
-                <button disabled={state.busy} onClick={() => fontInput.current?.click()}>Select Font Files…</button>
-                <button disabled={state.busy} onClick={() => officeInput.current?.click()}>Office CloudFonts…</button>
-            </div>
-            <p className="help-text">Local font access works in supported Chrome / Edge browsers. You can also select TTF, OTF or TTC files. For Aptos, select the CloudFonts folder under <code>%LOCALAPPDATA%\Microsoft\FontCache</code>.</p>
-            <h3>Required by this figure</h3>
-            {documentData?.fonts.length ? <ul className="font-list">{documentData.fonts.map(font => <li key={fontKey(font)}><span>{fontLabel(font)}</span><span className={missing.has(fontKey(font)) ? "font-missing" : "font-ready"}>{missing.has(fontKey(font)) ? "Missing" : "Ready"}</span></li>)}</ul> : <p>No text fonts required.</p>}
-            <h3>Loaded fonts ({state.loadedFonts.length})</h3>
-            <p>{state.loadedFonts.join(", ") || "No fonts loaded yet."}</p>
-            <p className="help-text">Figures and fonts are processed on this device and are not uploaded. Save history keeps small previews and names; it does not keep font files.</p>
+            <FontSetup state={state} onAllow={() => store.dispatch({ type: "ALLOW_FONT_ACCESS" })}
+                onChooseFolder={() => fontFolderInput.current?.click()} onChooseFiles={() => fontInput.current?.click()} />
         </Dialog>}
         {dialog === "source" && documentData && <Dialog title="Source SVG" onClose={() => setDialog(null)}>
             <p>Original SVG from {state.source}</p>

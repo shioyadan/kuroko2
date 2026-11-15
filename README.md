@@ -28,15 +28,24 @@ You can open an SVG file directly or drag it into the window.
 
 ### Loading fonts
 
-The PDF uses the original font files to preserve your figure's typefaces.
+The fonts needed by your figure are loaded automatically when you paste it. On
+first use, allow the browser to access your fonts if asked. Granted fonts are also
+loaded automatically after a page reload.
 
-- On first use, click Use Local Fonts and allow the browser to access your fonts. Once permission is granted, the fonts needed by each pasted figure load automatically, including after a page reload.
-- If a font cannot be found automatically, use Select Font Files… to choose its TTF, OTF or TTC file. On Windows, fonts are usually in `C:\Windows\Fonts`.
-- For Office fonts such as Aptos, use Fonts → Office CloudFonts… and select the `CloudFonts` folder under `%LOCALAPPDATA%\Microsoft\FontCache`.
+If fonts are still needed, click Add fonts… next to their names. The Fonts button
+in the toolbar opens the same guide.
 
-PDF creation resumes automatically when the missing fonts are loaded. While the preview says
+- If permission is needed, click Allow font access. If access is blocked or unavailable, the guide offers folder selection.
+- Click Choose font folder… to find the missing fonts in that folder and its subfolders. For Office fonts such as Aptos, select the `CloudFonts` folder under `%LOCALAPPDATA%\Microsoft\FontCache`. Other installed fonts are usually in `C:\Windows\Fonts`.
+- To select TTF, OTF, TTC or OTC files directly, expand Choose individual font files instead. If the guide is asking for permission, expand Add fonts from a folder or files instead first.
+
+Once the fonts are loaded, PDF creation resumes and the guide closes when the PDF
+is ready. Closing a permission prompt does not make it appear on every paste;
+use Add fonts… to retry.
+
+While the preview says
 “SVG preview · PDF pending,” the PDF is not ready yet. Loaded figures and fonts are kept only
-until you close or reload the page; local fonts are loaded again automatically while access remains allowed. Manually selected font files and Office CloudFonts folders need to be selected again after a reload. Save history separately remembers names, previews and save destinations on this device.
+until you close or reload the page; local fonts are loaded again automatically while access remains allowed. Manually selected font files and folders need to be selected again after a reload. Save history separately remembers names, previews and save destinations on this device.
 
 
 ### Editing and saving similar figures

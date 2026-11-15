@@ -23,6 +23,13 @@ interface LocalFont {
     blob(): Promise<Blob>;
 }
 const MAX_FONT_BYTES = 64 * 1024 * 1024;
+export type LocalFontAccess = "unknown" | "ready" | "permission" | "denied" | "unsupported" | "failed";
+export type FontPromptMode = "automatic" | "explicit" | "never";
+
+async function localFontPermission(): Promise<PermissionState | undefined> {
+    try { return (await navigator.permissions.query({ name: "local-fonts" as PermissionName })).state; }
+    catch { return undefined; }
+}
 
 export function parseFont(bytes: Uint8Array<ArrayBuffer>, name: string): LoadedFont {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -147,6 +154,8 @@ export class FontRegistry {
     private fonts: LoadedFont[] = [];
     private hashes = new Set<string>();
     private catalog: LocalFont[] | null = null;
+    private localQuery: Promise<LocalFontAccess> | null = null;
+    private prompted = false;
     private totalBytes = 0;
     get loaded(): readonly LoadedFont[] { return this.fonts; }
     get hasCatalog(): boolean { return this.catalog !== null; }
@@ -166,19 +175,42 @@ export class FontRegistry {
         this.fonts.push(font);
         this.totalBytes += bytes.length;
     }
-    async queryLocal(): Promise<void> {
+    async ensureLocal(mode: FontPromptMode = "automatic", current: () => boolean = () => true): Promise<LocalFontAccess> {
+        if (this.hasCatalog) return "ready";
+        if (this.localQuery) return this.localQuery;
         const query = (globalThis as typeof globalThis & { queryLocalFonts?: () => Promise<LocalFont[]> }).queryLocalFonts;
-        if (!query) throw new Error("Local fonts require Chrome / Edge on localhost or HTTPS. Select font files instead.");
-        this.catalog = await query();
+        if (!query) return "unsupported";
+        const permission = await localFontPermission();
+        if (!current()) return "unknown";
+        if (this.localQuery) return this.localQuery;
+        if (permission === "denied") return "denied";
+        if (permission !== "granted") {
+            // A permission prompt needs a live gesture. Ask once on paste; after
+            // dismissal, only the explicit setup action may ask again.
+            if (!navigator.userActivation?.isActive || mode === "never" || (mode === "automatic" && this.prompted)) return "permission";
+            this.prompted = true;
+        }
+        this.localQuery = this.readLocal(query);
+        try { return await this.localQuery; }
+        finally { this.localQuery = null; }
     }
-    async queryLocalIfGranted(): Promise<void> {
-        if (this.hasCatalog || !("queryLocalFonts" in globalThis)) return;
-        let permission: PermissionStatus;
+    private async readLocal(query: () => Promise<LocalFont[]>): Promise<LocalFontAccess> {
         try {
-            permission = await navigator.permissions.query({ name: "local-fonts" as PermissionName });
-        } catch { return; } // Unsupported permission descriptors keep the manual font workflow.
-        // Never request permission implicitly or repeatedly after denial.
-        if (permission.state === "granted") await this.queryLocal();
+            const catalog = await query.call(globalThis);
+            // Chromium can return an empty catalog after a denied/dismissed prompt.
+            // Do not cache that result as a successful enumeration.
+            if (!catalog.length) {
+                const permission = await localFontPermission();
+                if (permission === "denied") return "denied";
+                if (permission === "prompt") return "permission";
+            }
+            this.catalog = catalog;
+            return "ready";
+        } catch (error) {
+            console.warn(`Could not load local fonts: ${String(error)}`);
+            const permission = await localFontPermission();
+            return permission === "denied" ? "denied" : permission === "prompt" ? "permission" : "failed";
+        }
     }
     async resolve(requirements: readonly FontRequirement[]): Promise<string[]> {
         const errors: string[] = [];

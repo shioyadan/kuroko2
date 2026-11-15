@@ -3,7 +3,7 @@
  */
 import { blobToText, readClipboard, readPaste, type ClipboardSvg } from "./core/clipboard";
 import { convertSvg } from "./core/convert";
-import { FontRegistry, parseFont } from "./core/fonts";
+import { FontRegistry, parseFont, type FontPromptMode, type LocalFontAccess } from "./core/fonts";
 import { renderPdf } from "./core/pdf_preview";
 import { fontLabel, normalizeFontFamily, parseSvg, type FontRequirement, type SvgDocument } from "./core/svg";
 import { downloadBlob, pdfFileName, savePdf, type SaveHandle, type SaveResult } from "./file_access";
@@ -21,6 +21,7 @@ export interface StoreSnapshot {
     readonly error: string;
     readonly missingFonts: readonly FontRequirement[];
     readonly loadedFonts: readonly string[];
+    readonly fontAccess: LocalFontAccess;
     readonly fileName: string;
     readonly source: string;
     readonly zoom: number | "fit";
@@ -36,7 +37,7 @@ export type Action =
     | { type: "CANCEL" }
     | { type: "SET_FILE_NAME"; value: string }
     | { type: "SET_ZOOM"; value: number | "fit" }
-    | { type: "LOCAL_FONTS" }
+    | { type: "ALLOW_FONT_ACCESS" }
     | { type: "ADD_FONTS"; files: readonly File[]; directory?: boolean }
     | { type: "SAVE_PDF" }
     | { type: "DOWNLOAD_PDF" }
@@ -59,13 +60,13 @@ function aborted(error: unknown): boolean { return error instanceof DOMException
 export class Store {
     private state: StoreSnapshot = {
         document: null, pdf: null, preview: null, busy: false, saving: false, saveFailed: false,
-        status: "Copy a figure in PowerPoint, then paste it here.", error: "", missingFonts: [], loadedFonts: [],
+        status: "Copy a figure in PowerPoint, then paste it here.", error: "", missingFonts: [], loadedFonts: [], fontAccess: "unknown",
         fileName: "figure.pdf", source: "", zoom: "fit",
         history: [], suggestions: [], suggestionOpen: false, suggestNames: true, historyPersistent: true
     };
     private readonly listeners = new Set<() => void>();
     private readonly fonts = new FontRegistry();
-    private officeFiles: readonly File[] = [];
+    private fontFolderFiles: readonly File[] = [];
     private requestId = 0;
     private controller: AbortController | null = null;
     private memory: FigureMemory | null = null;
@@ -120,7 +121,7 @@ export class Store {
             }
             case "LOAD_FINISH":
                 this.memory = null; this.nameEdited = false; this.promptForDocument = true;
-                this.publish({ document: action.document, pdf: null, preview: null, source: action.source });
+                this.publish({ document: action.document, pdf: null, preview: null, missingFonts: this.fonts.missing(action.document.fonts), source: action.source });
                 action.document.warnings.forEach(warning => console.warn(warning));
                 console.info(`SVG loaded: ${action.source}; ${action.document.width.toFixed(1)} × ${action.document.height.toFixed(1)} CSS px.`);
                 void this.resolveAndConvert(action.id);
@@ -131,22 +132,22 @@ export class Store {
                 break;
             case "SET_FILE_NAME": this.nameEdited = true; this.publish({ fileName: action.value }); break;
             case "SET_ZOOM": this.publish({ zoom: action.value }); break;
-            case "LOCAL_FONTS": {
-                if (this.state.busy) return;
+            case "ALLOW_FONT_ACCESS": {
+                if (this.state.busy || this.state.saving) return;
                 const id = this.start("Waiting for local font access…");
-                void this.fonts.queryLocal().then(() => this.dispatch({ type: "FONTS_FINISH", id }), error => this.dispatch({ type: "FAIL", id, error }));
+                void this.resolveAndConvert(id, "explicit");
                 break;
             }
             case "ADD_FONTS": {
-                if (this.state.busy) return;
+                if (this.state.busy || this.state.saving || !action.files.length) return;
                 const id = this.start("Reading font files…");
-                if (action.directory) this.officeFiles = action.files;
+                if (action.directory) this.fontFolderFiles = action.files;
                 void this.addFontFiles(action.files, !!action.directory, id);
                 break;
             }
             case "FONTS_FINISH":
                 this.publish({ loadedFonts: this.fonts.labels() });
-                void this.resolveAndConvert(action.id);
+                void this.resolveAndConvert(action.id, "never");
                 break;
             case "CONVERT_FINISH":
                 this.memory = action.memory;
@@ -253,9 +254,9 @@ export class Store {
             this.dispatch({ type: "LOAD_FINISH", id, document: parseSvg(result.text), source: result.source });
         } catch (error) { this.dispatch({ type: "FAIL", id, error }); }
     }
-    private async scanOfficeFiles(id: number): Promise<void> {
+    private async scanFontFolder(id: number): Promise<void> {
         const required = this.state.document?.fonts ?? [];
-        for (const file of this.officeFiles) {
+        for (const file of this.fontFolderFiles) {
             if (id !== this.requestId) return;
             if (!this.fonts.missing(required).length) break;
             if (!/\.(ttf|otf|ttc|otc)$/i.test(file.name) || file.size > 64 * 1024 * 1024) continue;
@@ -269,7 +270,7 @@ export class Store {
     }
     private async addFontFiles(files: readonly File[], directory: boolean, id: number): Promise<void> {
         try {
-            if (directory) await this.scanOfficeFiles(id);
+            if (directory) await this.scanFontFolder(id);
             else for (const file of files) {
                 if (id !== this.requestId) return;
                 try { await this.fonts.add(file); console.info(`Loaded font: ${file.name}`); }
@@ -278,24 +279,24 @@ export class Store {
             this.dispatch({ type: "FONTS_FINISH", id });
         } catch (error) { this.dispatch({ type: "FAIL", id, error }); }
     }
-    private async resolveAndConvert(id: number): Promise<void> {
+    private async resolveAndConvert(id: number, promptMode: FontPromptMode = "automatic"): Promise<void> {
         const document = this.state.document;
         try {
             if (!document) { this.publish({ busy: false, status: "Fonts loaded. Paste a figure to continue." }); return; }
             if (this.fonts.missing(document.fonts).length) {
                 this.publish({ status: "Loading fonts…" });
-                try { await this.fonts.queryLocalIfGranted(); }
-                catch (error) { console.warn(`Could not automatically load local fonts: ${message(error)}`); }
+                const fontAccess = await this.fonts.ensureLocal(promptMode, () => id === this.requestId);
                 if (id !== this.requestId) return;
+                this.publish({ fontAccess });
             }
             if (this.fonts.hasCatalog) (await this.fonts.resolve(document.fonts)).forEach(error => console.warn(error));
-            await this.scanOfficeFiles(id);
+            await this.scanFontFolder(id);
             if (id !== this.requestId) return;
             const missingFonts = this.fonts.missing(document.fonts);
             this.publish({ missingFonts, loadedFonts: this.fonts.labels(), pdf: null, preview: null });
             if (missingFonts.length) {
                 console.warn(`Missing fonts: ${missingFonts.map(fontLabel).join(", ")}`);
-                this.publish({ busy: false, status: "Load the missing fonts to create the PDF." });
+                this.publish({ busy: false, status: "Choose Add fonts… to complete the PDF." });
                 return;
             }
             this.publish({ status: "Creating PDF…" });
