@@ -56,3 +56,34 @@ test("real font metadata and glyph coverage, TTC faces and deduplication", async
     for (let i = 0; i < v.getUint16(20); i++) { const p = 16 + 12 + i * 16 + 8; v.setUint32(p, v.getUint32(p) + 16); }
     assert.equal(parseFont(ttc, "font.ttc").faces[0].family, "DejaVu Sans");
 });
+
+test("automatic local font access only queries a granted permission and reuses its catalog", async () => {
+    const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    const queryDescriptor = Object.getOwnPropertyDescriptor(globalThis, "queryLocalFonts");
+    let state: PermissionState = "prompt", queries = 0, unsupported = false;
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { permissions: { query: async ({ name }: PermissionDescriptor) => {
+        assert.equal(name, "local-fonts");
+        if (unsupported) throw new TypeError("Unknown permission");
+        return { state };
+    } } } });
+    Object.defineProperty(globalThis, "queryLocalFonts", { configurable: true, value: async () => { queries++; return []; } });
+    try {
+        const registry = new FontRegistry();
+        await registry.queryLocalIfGranted();
+        state = "denied";
+        await registry.queryLocalIfGranted();
+        assert.equal(queries, 0, "automatic conversion must not request permission");
+        state = "granted"; unsupported = true;
+        await registry.queryLocalIfGranted();
+        assert.equal(queries, 0);
+        unsupported = false;
+        await registry.queryLocalIfGranted();
+        await registry.queryLocalIfGranted();
+        assert.equal(queries, 1, "a loaded catalog is reused for later figures");
+    } finally {
+        if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+        else Reflect.deleteProperty(globalThis, "navigator");
+        if (queryDescriptor) Object.defineProperty(globalThis, "queryLocalFonts", queryDescriptor);
+        else Reflect.deleteProperty(globalThis, "queryLocalFonts");
+    }
+});

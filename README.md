@@ -29,15 +29,15 @@ You can also open an SVG file directly or drag it into the window.
 
 ### Loading fonts
 
-You may need to load fonts once per session so the PDF uses the same typefaces as your figure.
+The PDF uses the original font files to preserve your figure's typefaces.
 
-- Click Use Local Fonts and allow the browser to access your fonts.
+- On first use, click Use Local Fonts and allow the browser to access your fonts. Once permission is granted, the fonts needed by each pasted figure load automatically, including after a page reload.
 - If a font cannot be found automatically, use Select Font Files… to choose its TTF, OTF or TTC file. On Windows, fonts are usually in `C:\Windows\Fonts`.
 - For Office fonts such as Aptos, use Fonts → Office CloudFonts… and select the `CloudFonts` folder under `%LOCALAPPDATA%\Microsoft\FontCache`.
 
 PDF creation resumes automatically when the missing fonts are loaded. While the preview says
 “SVG preview · PDF pending,” the PDF is not ready yet. Loaded figures and fonts are kept only
-until you close or reload the page. Save history separately remembers names, small previews and save destinations on this device.
+until you close or reload the page; local fonts are loaded again automatically while access remains allowed. Manually selected font files and Office CloudFonts folders need to be selected again after a reload. Save history separately remembers names, small previews and save destinations on this device.
 
 
 ### Editing and saving similar figures

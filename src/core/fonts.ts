@@ -171,6 +171,15 @@ export class FontRegistry {
         if (!query) throw new Error("Local fonts require Chrome / Edge on localhost or HTTPS. Select font files instead.");
         this.catalog = await query();
     }
+    async queryLocalIfGranted(): Promise<void> {
+        if (this.hasCatalog || !("queryLocalFonts" in globalThis)) return;
+        let permission: PermissionStatus;
+        try {
+            permission = await navigator.permissions.query({ name: "local-fonts" as PermissionName });
+        } catch { return; } // Unsupported permission descriptors keep the manual font workflow.
+        // Never open a permission prompt on automatic capture or repeatedly after denial.
+        if (permission.state === "granted") await this.queryLocal();
+    }
     async resolve(requirements: readonly FontRequirement[]): Promise<string[]> {
         const errors: string[] = [];
         const attempted = new Set<string>();

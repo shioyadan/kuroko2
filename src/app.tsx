@@ -172,7 +172,7 @@ export function App({ store }: { store: Store }) {
             <p className="help-text">Forgetting history does not delete PDF files.</p>
         </Dialog>}
         {dialog === "fonts" && <Dialog title="Fonts" onClose={() => setDialog(null)}>
-            <p>PDF export uses the original font files. Load the fonts used by your figure once per session.</p>
+            <p>PDF export uses the original font files. Once local font access is allowed, the fonts needed by each figure load automatically, including after a reload.</p>
             <div className="dialog-actions">
                 <button disabled={state.busy} onClick={() => store.dispatch({ type: "LOCAL_FONTS" })}>Use Local Fonts</button>
                 <button disabled={state.busy} onClick={() => fontInput.current?.click()}>Select Font Files…</button>

@@ -108,6 +108,13 @@ action requests write permission and reuses the exact saved handle. Saving is
 locked against new input until its result is recorded. Storage failures retain
 session-only history without blocking PDF saving.
 
+When a figure needs fonts, the store checks the `local-fonts` permission and
+automatically enumerates local fonts only if access is already granted. It reuses
+the catalog within the session and restores access after a reload. First use and
+unsupported browsers retain the manual font controls; enumeration failures do not
+block manual file selection. `test/local_fonts_smoke.cjs` exercises Chromium's
+real font API, including conversion without user activation and PDF text extraction.
+
 Save stages appear in the status bar and log. An `AbortError` from the file picker
 means it returned no destination; the app cannot distinguish cancellation from a
 browser rejection. Errors while opening, writing or closing a file are

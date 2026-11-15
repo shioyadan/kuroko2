@@ -284,6 +284,12 @@ export class Store {
         const document = this.state.document;
         try {
             if (!document) { this.publish({ busy: false, status: "Fonts loaded. Paste a figure to continue." }); return; }
+            if (this.fonts.missing(document.fonts).length) {
+                this.publish({ status: "Loading fonts…" });
+                try { await this.fonts.queryLocalIfGranted(); }
+                catch (error) { console.warn(`Could not automatically load local fonts: ${message(error)}`); }
+                if (id !== this.requestId) return;
+            }
             if (this.fonts.hasCatalog) (await this.fonts.resolve(document.fonts)).forEach(error => console.warn(error));
             await this.scanOfficeFiles(id);
             if (id !== this.requestId) return;
