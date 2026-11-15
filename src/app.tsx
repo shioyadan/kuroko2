@@ -87,7 +87,10 @@ export function App({ store }: { store: Store }) {
         store.dispatch({ type: "ADD_FONTS", files: [...(input.files ?? [])], directory }); input.value = "";
     };
 
-    return <div className="kuroko-app" onDragOver={event => { event.preventDefault(); setDragging(true); }}
+    return <div className="kuroko-app" onDragStartCapture={event => {
+        // Image drags and selection drags from previews must never become new input.
+        if (event.target instanceof Element && event.target.closest(".preview-sheet, .suggestion-previews, .save-history-list img")) event.preventDefault();
+    }} onDragOver={event => { event.preventDefault(); setDragging(true); }}
         onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
         onDrop={event => {
             event.preventDefault(); setDragging(false);
@@ -163,7 +166,7 @@ export function App({ store }: { store: Store }) {
             <p className="help-text">The last 30 saved figures are remembered on this device using their names, small previews and save destinations. Full SVGs, PDFs and fonts are not stored. Download entries record a started download; the browser controls its final location and name.</p>
             {!state.historyPersistent && <p role="status">History is available for this session only because browser storage is unavailable.</p>}
             <ul className="save-history-list">{state.history.map(record => <li key={record.id}>
-                <img src={record.thumbnail} alt="Saved figure thumbnail" />
+                <img src={record.thumbnail} alt="Saved figure thumbnail" draggable={false} />
                 <span><strong>{record.name}</strong><small>{new Date(record.savedAt).toLocaleString()}</small></span>
                 <button disabled={state.saving} onClick={() => store.dispatch({ type: "REMOVE_HISTORY", id: record.id })} aria-label={`Forget ${record.name}`}>Forget</button>
             </li>)}</ul>

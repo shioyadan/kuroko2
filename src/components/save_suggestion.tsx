@@ -14,8 +14,8 @@ export function SaveSuggestion({ candidates, currentPreview, onSave, onSaveAs, o
     return <>
         <p>This figure looks like one you saved before. Use the same PDF name?</p>
         <div className="suggestion-previews">
-            <figure><img src={candidate.thumbnail} alt="Previously saved figure" /><figcaption>Previously saved</figcaption></figure>
-            <figure><img src={currentPreview} alt="Current figure to save" /><figcaption>Current figure</figcaption></figure>
+            <figure><img src={candidate.thumbnail} alt="Previously saved figure" draggable={false} /><figcaption>Previously saved</figcaption></figure>
+            <figure><img src={currentPreview} alt="Current figure to save" draggable={false} /><figcaption>Current figure</figcaption></figure>
         </div>
         <fieldset className="candidate-list"><legend>Suggested file name</legend>
             {candidates.map(record => <label key={record.id}>
