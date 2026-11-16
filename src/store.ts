@@ -206,7 +206,7 @@ export class Store {
                 } else {
                     // Chrome uses AbortError both for cancellation and an interrupted/rejected picker.
                     console.info(`Save dialog ended without a destination: ${message(action.error)}`);
-                    this.publish({ saveFailed: true, status: "Save cancelled." });
+                    this.publish({ saveFailed: true, status: "Save dialog closed without saving." });
                 }
                 break;
             case "SAVE_SVG":

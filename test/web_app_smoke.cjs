@@ -203,7 +203,7 @@ async function save(page, fileName) {
         const countCancelledDownload = () => { cancelledDownloads++; };
         page.on("download", countCancelledDownload);
         await page.getByRole("button", { name: /^Save PDF/ }).click();
-        await page.getByText("Save cancelled.", { exact: true }).waitFor();
+        await page.getByText("Save dialog closed without saving.", { exact: true }).waitFor();
         assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), true);
         assert.equal(cancelledDownloads, 0, "a cancelled/interrupted picker must not start a download automatically");
         page.off("download", countCancelledDownload);

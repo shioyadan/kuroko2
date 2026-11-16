@@ -147,7 +147,7 @@ export function App({ store }: { store: Store }) {
             </div>
         </nav>
         {(state.error || state.saveFailed) && <div className={`notice ${state.error ? "error" : "save-incomplete"}`} role={state.error ? "alert" : "status"}>
-            {state.error || "No file was saved. If you confirmed the save dialog, try downloading the PDF instead."}
+            {state.error || "No file was saved. If you confirmed the dialog, the browser may have blocked the destination. Try another folder or download the PDF instead."}
             {state.saveFailed && state.pdf && <button className="save-fallback" disabled={state.busy || state.saving} onClick={() => store.dispatch({ type: "DOWNLOAD_PDF" })}>Download PDF instead</button>}
         </div>}
         <main ref={previewArea} className={`preview-area ${dragging ? "dragging" : ""}`} aria-label="Figure preview" aria-busy={state.busy}>

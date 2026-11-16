@@ -44,6 +44,7 @@ async function fileBytes(page, name = "diagram.pdf") {
             Object.defineProperty(window, "showSaveFilePicker", { configurable: true, value: async options => {
                 window.pickerCalls++;
                 window.pickerStartIn = options.startIn;
+                if (window.abortPicker) throw new DOMException("The user aborted a request.", "AbortError");
                 const directory = await navigator.storage.getDirectory();
                 return directory.getFileHandle(window.nextSaveName || options.suggestedName, { create: true });
             } });
@@ -164,6 +165,34 @@ async function fileBytes(page, name = "diagram.pdf") {
         assert.equal(await dialog.count(), 0, "cleared history must stay cleared after reload");
         assert.deepEqual(await fileBytes(page), second, "clearing history must not delete saved PDFs");
         assert.deepEqual(errors, []);
+
+        // A picker AbortError may mean a rejected destination, not just cancellation.
+        // Keep the PDF available and let the user explicitly choose a download.
+        await page.getByLabel("PDF file name", { exact: true }).fill("picker-recovery.pdf");
+        const downloads = [];
+        page.on("download", download => downloads.push(download));
+        await page.evaluate(() => { window.abortPicker = true; });
+        await page.getByRole("button", { name: /^Save PDF/ }).click();
+        await page.getByText("Save dialog closed without saving.", { exact: true }).waitFor();
+        await page.getByText(/the browser may have blocked the destination/).waitFor();
+        assert.equal(downloads.length, 0, "a cancelled or rejected dialog must not trigger an automatic download");
+        await page.getByLabel("Application menu", { exact: true }).click();
+        await page.getByRole("button", { name: "Save history", exact: true }).click();
+        assert.equal(await history.locator("li").count(), 0, "no save should be recorded before download recovery");
+        await history.getByRole("button", { name: "Close Save history", exact: true }).click();
+        const pickerCalls = await page.evaluate(() => window.pickerCalls);
+        const pickerDownload = page.waitForEvent("download");
+        await page.getByRole("button", { name: "Download PDF instead", exact: true }).click();
+        const pickerRecovery = await pickerDownload;
+        assert.equal(pickerRecovery.suggestedFilename(), "picker-recovery.pdf");
+        assert.equal(await pickerRecovery.failure(), null);
+        assert.match(fs.readFileSync(await pickerRecovery.path()).toString("latin1"), /^%PDF-/);
+        await page.getByText("Download started: picker-recovery.pdf", { exact: true }).waitFor();
+        assert.equal(await page.evaluate(() => window.pickerCalls), pickerCalls, "recovery bypasses the rejected picker");
+        await page.getByLabel("Application menu", { exact: true }).click();
+        await page.getByRole("button", { name: "Save history", exact: true }).click();
+        await history.getByText("picker-recovery.pdf", { exact: true }).waitFor();
+        await history.getByRole("button", { name: "Close Save history", exact: true }).click();
 
         // Storage denial must not prevent conversion, downloading or session-only suggestions.
         const ephemeral = await browser.newContext({ acceptDownloads: true });
