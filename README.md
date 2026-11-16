@@ -23,6 +23,8 @@ A typical use is preparing figures for LaTeX papers and presentations.
 4. If fonts are missing, load them as described below.
 5. Check the PDF preview, then click Save PDF or press Ctrl+S / ⌘S.
 
+The file name is editable just to the left of the menu. Fit to window and the preview zoom selector are also in the top toolbar.
+
 You can open an SVG file directly or drag it into the window. The menu (☰) at the
 top right contains Open SVG, Fonts, View source SVG, Save history and About kuroko 2.
 Clipboard reading, PDF creation and preview rendering progress appear at the top

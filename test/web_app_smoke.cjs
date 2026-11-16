@@ -54,7 +54,7 @@ async function save(page, fileName) {
         const errors = [];
         page.on("pageerror", error => errors.push(error.message));
         await page.goto(pathToFileURL(path.join(root, "dist-web/index.html")).href);
-        await page.getByRole("heading", { name: "PowerPoint → PDF" }).waitFor();
+        await page.getByRole("heading", { name: "kuroko 2" }).waitFor();
         assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false);
         await page.screenshot({ path: path.join(work, "empty.png") });
 
@@ -87,7 +87,7 @@ async function save(page, fileName) {
         assert.equal(await menu.evaluate(element => element.open), false);
         assert.equal(await menuButton.evaluate(button => button === document.activeElement), true);
         await menuButton.click();
-        await page.getByRole("heading", { name: "PowerPoint → PDF" }).click();
+        await page.getByRole("heading", { name: "kuroko 2" }).click();
         assert.equal(await menu.evaluate(element => element.open), false);
         await menuButton.click();
         await page.evaluate(() => {

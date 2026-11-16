@@ -114,9 +114,18 @@ export function App({ store }: { store: Store }) {
         <input ref={fontInput} type="file" accept=".ttf,.otf,.ttc,.otc" multiple hidden aria-label="Select font files" onChange={event => filesSelected(event.currentTarget)} />
         <input ref={fontFolderInput} type="file" multiple hidden aria-label="Select font folder" {...{ webkitdirectory: "" }} onChange={event => filesSelected(event.currentTarget, true)} />
         <nav className="toolbar" aria-label="Main toolbar">
-            <span className="brand">kuroko 2</span>
-            <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
-            <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
+            <div className="toolbar-actions">
+                <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
+                <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
+            </div>
+            <div className="toolbar-document">
+                <div className="zoom-controls">
+                    <button className="icon-button" title="Fit to window" aria-label="Fit to window" onClick={() => store.dispatch({ type: "SET_ZOOM", value: "fit" })}><BsArrowsFullscreen /></button>
+                    <select aria-label="Preview zoom" value={state.zoom} onChange={event => store.dispatch({ type: "SET_ZOOM", value: event.target.value === "fit" ? "fit" : Number(event.target.value) })}>
+                        <option value="fit">Fit</option>{[0.25, 0.5, 1, 1.5, 2, 4].map(value => <option key={value} value={value}>{value * 100}%</option>)}
+                    </select>
+                </div>
+            </div>
             <span className="toolbar-spacer" />
             {(documentData || state.busy) && <div className={`toolbar-status ${missing.size && !state.busy ? "toolbar-status-needed" : ""}`}>
                 {state.busy ? <span className="spinner" aria-hidden="true" /> : <BsFonts aria-hidden="true" />}
@@ -126,13 +135,16 @@ export function App({ store }: { store: Store }) {
                 {state.busy ? <button className="status-cancel" aria-label={state.fontLoading ? "Cancel font loading" : "Cancel"} title="Cancel" onClick={() => store.dispatch({ type: "CANCEL" })}><BsX aria-hidden="true" /></button>
                     : missing.size > 0 && !state.busy && <button className="font-add" onClick={openFonts}>Add fonts…</button>}
             </div>}
-            <ApplicationMenu>
-                <button aria-label="Open SVG" onClick={() => svgInput.current?.click()}><BsFolder2Open aria-hidden="true" />Open SVG…</button>
-                <button className={missing.size ? "attention" : ""} onClick={openFonts}><BsFonts aria-hidden="true" />Fonts</button>
-                <button disabled={!documentData} onClick={() => setDialog("source")}><BsCodeSlash aria-hidden="true" />View source SVG</button>
-                <button onClick={() => setDialog("history")}><BsClockHistory aria-hidden="true" />Save history</button>
-                <button onClick={() => setDialog("about")}><BsInfoCircle aria-hidden="true" />About kuroko 2</button>
-            </ApplicationMenu>
+            <div className="toolbar-file">
+                <input className="file-name-control" value={state.fileName} onChange={event => store.dispatch({ type: "SET_FILE_NAME", value: event.currentTarget.value })} aria-label="PDF file name" title="PDF file name" spellCheck={false} />
+                <ApplicationMenu>
+                    <button aria-label="Open SVG" onClick={() => svgInput.current?.click()}><BsFolder2Open aria-hidden="true" />Open SVG…</button>
+                    <button className={missing.size ? "attention" : ""} onClick={openFonts}><BsFonts aria-hidden="true" />Fonts</button>
+                    <button disabled={!documentData} onClick={() => setDialog("source")}><BsCodeSlash aria-hidden="true" />View source SVG</button>
+                    <button onClick={() => setDialog("history")}><BsClockHistory aria-hidden="true" />Save history</button>
+                    <button onClick={() => setDialog("about")}><BsInfoCircle aria-hidden="true" />About kuroko 2</button>
+                </ApplicationMenu>
+            </div>
         </nav>
         {(state.error || state.saveFailed) && <div className={`notice ${state.error ? "error" : "save-incomplete"}`} role={state.error ? "alert" : "status"}>
             {state.error || "No file was saved. If you confirmed the save dialog, try downloading the PDF instead."}
@@ -141,8 +153,9 @@ export function App({ store }: { store: Store }) {
         <main ref={previewArea} className={`preview-area ${dragging ? "dragging" : ""}`} aria-label="Figure preview" aria-busy={state.busy}>
             {!documentData ? <div className="empty-state">
                 <BsClipboard className="empty-icon" />
-                <h1>PowerPoint → PDF</h1>
-                <p>Copy a figure, then press <kbd>Ctrl+V</kbd> or <kbd>⌘V</kbd>.</p>
+                <h1>kuroko 2</h1>
+                <p className="empty-description">PowerPoint · Excel · SVG → PDF</p>
+                <p>Copy a figure in PowerPoint or Excel,<br />then press <kbd>Ctrl+V</kbd> or <kbd>⌘V</kbd>.</p>
                 <p className="subtle">Shapes and text stay sharp at any size.</p>
                 <button onClick={() => svgInput.current?.click()}><BsFolder2Open /> Open an SVG file</button>
                 <span className="drop-hint">or drop an SVG here</span>
@@ -152,17 +165,9 @@ export function App({ store }: { store: Store }) {
             </div>}
             {dragging && <div className="drop-overlay">Drop SVG to create a PDF</div>}
         </main>
-        <div className="document-bar">
-            <label>File name <input value={state.fileName} onChange={event => store.dispatch({ type: "SET_FILE_NAME", value: event.currentTarget.value })} aria-label="PDF file name" spellCheck={false} /></label>
-            {documentData && <span className="dimensions">{(documentData.width * 25.4 / 96).toFixed(1)} × {(documentData.height * 25.4 / 96).toFixed(1)} mm</span>}
-            <span className="toolbar-spacer" />
-            <button className="icon-button" title="Fit to window" aria-label="Fit to window" onClick={() => store.dispatch({ type: "SET_ZOOM", value: "fit" })}><BsArrowsFullscreen /></button>
-            <select aria-label="Preview zoom" value={state.zoom} onChange={event => store.dispatch({ type: "SET_ZOOM", value: event.target.value === "fit" ? "fit" : Number(event.target.value) })}>
-                <option value="fit">Fit</option>{[0.25, 0.5, 1, 1.5, 2, 4].map(value => <option key={value} value={value}>{value * 100}%</option>)}
-            </select>
-        </div>
         {logOpen && <LogPane entries={logs} onClear={() => setLogs([])} onClose={toggleLog} />}
         <footer className="status-bar"><span role="status">{state.status}</span>
+            {documentData && <span className="dimensions">{(documentData.width * 25.4 / 96).toFixed(1)} × {(documentData.height * 25.4 / 96).toFixed(1)} mm</span>}
             <button className={warning ? "unread-warning" : ""} onClick={toggleLog} aria-expanded={logOpen}><BsJournalText /> Log{unread > 0 ? ` (${unread})` : ""}</button>
         </footer>
         {state.suggestionOpen && state.suggestions.length > 0 && state.preview && dialog === null && <Dialog title="Save matching figure" onClose={() => store.dispatch({ type: "DISMISS_SUGGESTION" })}>
