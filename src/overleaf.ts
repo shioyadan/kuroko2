@@ -2,7 +2,7 @@ import { renderPdf } from "./core/pdf_preview";
 import { downloadBlob } from "./file_access";
 import type { FigureMemory } from "./core/figure_match";
 import { canonicalProjectUrl, loadOverleafHistory, MAX_OVERLEAF_HISTORY, MAX_RECENT_PROJECTS,
-    overleafDestinationSuggestions, projectDisplayName, putOverleafSavedFigure, readRecentProjects, writeRecentProjects,
+    overleafDestinationSuggestions, projectDisplayName, putOverleafSavedFigure, readRecentProjects, validPdfPath, writeRecentProjects,
     type OverleafSavedFigure, type RecentOverleafProject } from "./overleaf_history";
 
 export interface OverleafFile { readonly path: string; readonly oid: string; readonly size: number }
@@ -211,7 +211,7 @@ export class OverleafStore {
             }
             case "CONNECT": {
                 const url = action.url.trim();
-                if (!/^https:\/\/(?:git@)?git\.overleaf\.com\/[a-f\d]{24}\/?$/i.test(url)) {
+                if (!canonicalProjectUrl(url)) {
                     this.publish({ error: "Enter an Overleaf Git URL: https://git.overleaf.com/<project-id>. Do not include a token." });
                     break;
                 }
@@ -261,7 +261,7 @@ export class OverleafStore {
             case "PREPARE_UPLOAD": {
                 if (!this.state.url) break;
                 const path = action.path.trim();
-                if (!path || !/\.pdf$/i.test(path) || /[\\\x00-\x1f\x7f]/.test(path) || path.split("/").some(part => !part || part === "." || part === ".." || part.toLowerCase() === ".git")) {
+                if (!validPdfPath(path)) {
                     this.publish({ error: "Enter a relative PDF path, for example figures/figure.pdf." });
                     break;
                 }

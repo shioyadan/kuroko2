@@ -1,4 +1,5 @@
 import { matchingFigures, MAX_THUMBNAIL_LENGTH, validFingerprint, type FigureMemory } from "./core/figure_match";
+import { HistoryDatabase } from "./history_database";
 
 export const MAX_RECENT_PROJECTS = 10;
 export const MAX_OVERLEAF_HISTORY = 30;
@@ -18,8 +19,7 @@ export interface OverleafSavedFigure extends FigureMemory {
 }
 
 const RECENT_PROJECTS = "kuroko.overleafProjects";
-const DATABASE = "kuroko.overleafHistory";
-const STORE = "figures";
+const database = new HistoryDatabase("kuroko.overleafHistory", "Overleaf save history");
 
 /** Keep only a project address, never URL credentials or token parameters. */
 export function canonicalProjectUrl(value: unknown): string | null {
@@ -56,7 +56,7 @@ export function writeRecentProjects(projects: readonly RecentOverleafProject[]):
     localStorage.setItem(RECENT_PROJECTS, JSON.stringify(normalizedProjects(projects)));
 }
 
-function validPdfPath(value: unknown): value is string {
+export function validPdfPath(value: unknown): value is string {
     return typeof value === "string" && value.length <= 1024 && /\.pdf$/i.test(value) &&
         !/[\\:\x00-\x1f\x7f\ud800-\udfff]/u.test(value) &&
         value.split("/").every(part => !!part && part !== "." && part !== ".." && part.toLowerCase() !== ".git");
@@ -92,37 +92,9 @@ export function overleafDestinationSuggestions(memory: FigureMemory | null, proj
     return matchingFigures(memory.fingerprint, candidates);
 }
 
-function openDatabase(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DATABASE, 1);
-        let blocked = false;
-        request.onupgradeneeded = () => { request.result.createObjectStore(STORE, { keyPath: "id" }); };
-        request.onsuccess = () => {
-            if (blocked) { request.result.close(); return; }
-            request.result.onversionchange = () => request.result.close();
-            resolve(request.result);
-        };
-        request.onerror = () => reject(request.error);
-        request.onblocked = () => { blocked = true; reject(new Error("Overleaf save history is locked by another tab.")); };
-    });
-}
-
-function finished(transaction: IDBTransaction): Promise<void> {
-    return new Promise((resolve, reject) => {
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = transaction.onabort = () => reject(transaction.error ?? new Error("Overleaf save history transaction failed."));
-    });
-}
-
 export async function loadOverleafHistory(): Promise<OverleafSavedFigure[]> {
-    const database = await openDatabase();
-    try {
-        const transaction = database.transaction(STORE, "readonly");
-        const completion = finished(transaction);
-        const request = transaction.objectStore(STORE).getAll();
-        await completion;
-        return recentFigures(request.result);
-    } finally { database.close(); }
+    const request = await database.transaction("readonly", store => store.getAll());
+    return recentFigures(request.result);
 }
 
 export async function putOverleafSavedFigure(record: OverleafSavedFigure): Promise<void> {
@@ -133,13 +105,8 @@ export async function putOverleafSavedFigure(record: OverleafSavedFigure): Promi
         thumbnail: record.thumbnail,
         fingerprint: { version: 1, aspect: record.fingerprint.aspect, ink: [...record.fingerprint.ink], shapes: [...record.fingerprint.shapes] }
     };
-    const database = await openDatabase();
-    try {
-        const transaction = database.transaction(STORE, "readwrite");
-        const completion = finished(transaction);
-        const store = transaction.objectStore(STORE);
-        try { store.put(metadata); }
-        catch (error) { transaction.abort(); await completion.catch(() => {}); throw error; }
+    await database.transaction("readwrite", store => {
+        store.put(metadata);
         const request = store.getAll();
         request.onsuccess = () => {
             const records = request.result;
@@ -147,25 +114,5 @@ export async function putOverleafSavedFigure(record: OverleafSavedFigure): Promi
             const retained = new Set(recentFigures(distinct).map(old => old.id));
             for (const old of records) if (!retained.has(old.id)) store.delete(old.id);
         };
-        await completion;
-    } finally { database.close(); }
-}
-
-export async function removeOverleafSavedFigures(project?: string): Promise<void> {
-    const canonical = project === undefined ? null : canonicalProjectUrl(project);
-    if (project !== undefined && !canonical) throw new Error("Invalid Overleaf project URL.");
-    const database = await openDatabase();
-    try {
-        const transaction = database.transaction(STORE, "readwrite");
-        const completion = finished(transaction);
-        const store = transaction.objectStore(STORE);
-        if (!canonical) store.clear();
-        else {
-            const request = store.getAll();
-            request.onsuccess = () => {
-                for (const record of request.result) if (record.project === canonical) store.delete(record.id);
-            };
-        }
-        await completion;
-    } finally { database.close(); }
+    });
 }

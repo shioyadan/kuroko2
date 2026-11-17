@@ -275,6 +275,16 @@ async function fixture(context) {
         const initialLayout = await previewLayout(panel);
         assert.ok(initialLayout[0].x < initialLayout[1].x, "the upload figure is always on the left");
 
+        for (const destination of ["../escape.pdf", "C:/figure.pdf", "figures/.git/figure.pdf", "a".repeat(1021) + ".pdf"]) {
+            await setDestination(panel, destination);
+            await panel.getByRole("button", { name: "Upload PDF", exact: true }).click();
+            await panel.getByRole("alert").filter({ hasText: "Enter a relative PDF path" }).waitFor();
+        }
+        assert.equal(api.uploads.length, 0, "invalid destinations are rejected before contacting the Git bridge");
+        await closePanel(panel);
+        panel = await openPanel(page);
+        await settle(panel);
+
         await navigate(panel, "empty");
         await panel.getByRole("button", { name: "Up one folder", exact: true }).click();
         await navigate(panel, "figures");
