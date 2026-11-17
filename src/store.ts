@@ -10,6 +10,7 @@ import { substituteFonts } from "./core/font_substitution";
 import { downloadBlob, pdfFileName, savePdf, type SaveHandle, type SaveResult } from "./file_access";
 import { describeFigure, matchingFigures, type FigureMemory } from "./core/figure_match";
 import { loadSaveHistory, putSavedFigure, removeSavedFigures, saveHistoryId, MAX_SAVE_HISTORY, type SavedFigure } from "./save_history";
+import { OverleafStore } from "./overleaf";
 
 export interface StoreSnapshot {
     readonly document: SvgDocument | null;
@@ -61,6 +62,7 @@ function message(error: unknown): string { return error instanceof Error ? error
 function aborted(error: unknown): boolean { return error instanceof DOMException && error.name === "AbortError"; }
 
 export class Store {
+    readonly overleaf = new OverleafStore();
     private state: StoreSnapshot = {
         document: null, pdf: null, preview: null, busy: false, saving: false, saveFailed: false,
         status: "Copy a figure in PowerPoint, then paste it here.", error: "", missingFonts: [], syntheticBoldFonts: [], loadedFonts: [], fontAccess: "unknown", fontLoading: false,

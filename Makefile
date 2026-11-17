@@ -14,6 +14,7 @@ typecheck:
 	npm run typecheck
 test:
 	npm test
+	python3 -B -m unittest discover -s test -p '*_test.py'
 check:
 	bash -n kuroko2.sh
 	$(MAKE) typecheck
@@ -26,6 +27,7 @@ production-smoke: production
 	node test/local_fonts_smoke.cjs
 	node test/synthetic_bold_smoke.cjs
 	node test/fallback_fonts_smoke.cjs
+	node test/overleaf_smoke.cjs
 clean:
 	rm -rf dist-web dist-release
 
@@ -34,7 +36,7 @@ ARCHIVE_NAME := kuroko-v$(VERSION)
 archive:
 	rm -rf dist-release/$(ARCHIVE_NAME) dist-release/$(ARCHIVE_NAME).zip
 	mkdir -p dist-release/$(ARCHIVE_NAME)/docs
-	cp dist-web/index.html kuroko2.sh README.md README.ja.md LICENSE.md THIRD_PARTY_LICENSES.md dist-release/$(ARCHIVE_NAME)/
+	cp dist-web/index.html kuroko2.sh kuroko2_server.py README.md README.ja.md LICENSE.md THIRD_PARTY_LICENSES.md dist-release/$(ARCHIVE_NAME)/
 	cp docs/development.md dist-release/$(ARCHIVE_NAME)/docs/
 	cd dist-release && zip -q -r $(ARCHIVE_NAME).zip $(ARCHIVE_NAME)
 	zip -T dist-release/$(ARCHIVE_NAME).zip

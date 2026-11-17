@@ -18,11 +18,13 @@ server-side conversion is required.
 
 ```sh
 make serve     # Development server: http://127.0.0.1:8080
-./kuroko2.sh   # Serve the built HTML only: http://127.0.0.1:30080
+./kuroko2.sh   # Built HTML + local Overleaf bridge: http://127.0.0.1:30080
 ```
 
-`kuroko2.sh` requires Python 3; `KUROKO_PORT` overrides its port. On Windows,
-`py -m http.server 30080 --bind 127.0.0.1 --directory dist-web` is another option.
+`kuroko2.sh` requires Python 3; `KUROKO_PORT` overrides its port. Overleaf access
+also requires Git with authentication already configured in the same environment.
+On Windows, run the launcher in WSL. A plain static server is sufficient for PDF
+conversion, but does not provide the Overleaf API.
 
 ## Checks and packaging
 
@@ -32,7 +34,7 @@ make check
 make archive
 ```
 
-`make check` runs launcher syntax validation, TypeScript checks, core tests, license
+`make check` runs launcher syntax validation, TypeScript checks, core and local Git tests, license
 checks, the production build, the single-HTML check and browser smoke tests.
 Linux tests also require DejaVu Sans (`fonts-dejavu-core` on Ubuntu).
 Set `CHROMIUM_PATH` to use an existing Chromium executable, or `TEST_FONT_PATH`
@@ -55,7 +57,8 @@ HTTP origins where `crypto.randomUUID()` is unavailable.
 `make release-archive` runs checks and packages the app as
 `dist-release/kuroko-v<version>.zip`. `make archive ARCHIVE_NAME=kuroko-latest`
 packages the already-built app under the stable download filename used on Pages.
-Both archives include the English and Japanese guides and license notices.
+Both archives include the Python launcher server, the English and Japanese guides
+and license notices.
 
 ## GitHub Pages
 
@@ -83,6 +86,8 @@ toolbar and paste/save flow follow the original Kuroko.
 | --- | --- |
 | `src/app.tsx`, `src/components/` | Toolbar, preview, dialogs and bounded, resizable console log pane |
 | `src/store.ts` | Input, font resolution, conversion, cancellation and saving |
+| `src/overleaf.ts` | Overleaf connection, previews, upload confirmation and cancellation |
+| `kuroko2_server.py` | Loopback HTTP server and temporary Git repository for Overleaf |
 | `src/core/clipboard.ts` | Paste events, Async Clipboard API and UTF-8/UTF-16 decoding |
 | `src/core/svg.ts` | SVG validation/sanitization, dimensions and required fonts |
 | `src/core/fonts.ts` | SFNT/TTC metadata, embedding restrictions, deduplication and glyph coverage |
@@ -186,6 +191,41 @@ fonts or substitutes still stop conversion instead of silently dropping text.
 Restricted, bitmap-only or no-subsetting fonts cannot be embedded. Limits include
 20 MiB input SVGs, 30,000 elements, font/rasterization budgets and 30-second worker
 timeouts. Non-Office filters are handled by krilla-svg.
+
+## Local Overleaf bridge
+
+The launcher serves only `/`, `/index.html`, and `/api/overleaf` routes using
+Python's standard library. The browser makes same-origin requests; no CORS proxy,
+Node server, or additional Python package is needed. It detects the API only
+when Menu → Overleaf is opened. Conversion remains entirely in the single HTML.
+
+The server binds to `127.0.0.1`, validates Host and Origin, and requires a random
+process session header for all project operations. It accepts only Overleaf HTTPS
+Git URLs, relative PDF paths, and PDFs up to 50 MiB. Credentials are supplied by
+the existing Git credential helper, with interactive prompts disabled. No token
+is accepted in the URL or stored in browser state. Git hooks and HTTP redirects
+are disabled, and subprocesses receive argument arrays, never shell commands.
+
+One temporary bare clone is retained per launcher process. Git plumbing builds a
+commit from the latest remote tree, changing only the selected PDF. The previously
+listed blob ID is the overwrite precondition. Uploads also carry the displayed
+project URL, so switching projects in another tab cannot redirect a pending upload.
+Normal pushes never force the remote;
+an unrelated concurrent edit can be retried once, while a changed target requires
+new confirmation. Identical bytes skip the commit. A failed push is followed by a
+fetch to check whether it actually succeeded. Cancellation interrupts the active
+Git process group; cancellation during push can leave an uncertain remote result,
+so the UI asks for a refresh before retrying. Each Git command has a 120-second
+timeout. Disconnect and server shutdown remove the temporary clone.
+
+The separate Overleaf Store keeps project PDF previews from replacing the pasted
+figure. It uses the existing PDFium worker to render page one. PDF downloads use
+the browser download mechanism. Overleaf uploads do not add local-save history.
+
+`test/overleaf_server_test.py` uses isolated temporary bare Git repositories and
+HTTP requests to check uploads, conflicts, path checks and server boundaries.
+`test/overleaf_smoke.cjs` checks the browser flow with a local API fixture. Neither
+test contacts a real Overleaf project or needs credentials.
 
 ## Notices and local files
 

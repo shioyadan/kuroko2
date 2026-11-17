@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { BsClipboard, BsFileEarmarkArrowDown, BsFolder2Open, BsFonts, BsInfoCircle, BsJournalText, BsCodeSlash, BsX, BsArrowsFullscreen, BsClockHistory } from "react-icons/bs";
+import { BsClipboard, BsFileEarmarkArrowDown, BsFolder2Open, BsFonts, BsInfoCircle, BsJournalText, BsCodeSlash, BsX, BsArrowsFullscreen, BsClockHistory, BsCloudArrowUp } from "react-icons/bs";
 import { Store } from "./store";
 import { fontKey, fontLabel } from "./core/svg";
 import { LogPane, type LogEntry, type LogLevel } from "./components/log_pane";
 import { SaveSuggestion } from "./components/save_suggestion";
 import { FontSetup } from "./components/font_setup";
 import { ApplicationMenu } from "./components/application_menu";
+import { OverleafPanel } from "./components/overleaf_panel";
 
 function editable(target: EventTarget | null): boolean {
     return target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input,textarea,select"));
@@ -21,13 +22,14 @@ function Dialog({ title, onClose, children }: { title: string; onClose(): void; 
 
 export function App({ store }: { store: Store }) {
     const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
+    const overleaf = useSyncExternalStore(store.overleaf.subscribe, store.overleaf.getSnapshot);
     const svgInput = useRef<HTMLInputElement>(null);
     const fontInput = useRef<HTMLInputElement>(null);
     const fontFolderInput = useRef<HTMLInputElement>(null);
     const closeFontsWhenReady = useRef(false);
     const previewArea = useRef<HTMLDivElement>(null);
     const [available, setAvailable] = useState({ width: 800, height: 600 });
-    const [dialog, setDialog] = useState<"fonts" | "source" | "about" | "history" | null>(null);
+    const [dialog, setDialog] = useState<"fonts" | "source" | "about" | "history" | "overleaf" | null>(null);
     const [dragging, setDragging] = useState(false);
     const [logs, setLogs] = useState<readonly LogEntry[]>([]);
     const [logOpen, setLogOpen] = useState(false);
@@ -104,6 +106,7 @@ export function App({ store }: { store: Store }) {
         onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
         onDrop={event => {
             event.preventDefault(); setDragging(false);
+            if (document.querySelector("dialog[open]")) return;
             const file = [...event.dataTransfer.files].find(file => /\.svg$/i.test(file.name) || file.type === "image/svg+xml");
             if (file) store.dispatch({ type: "OPEN_SVG", file });
             else store.dispatch({ type: "PASTE", data: event.dataTransfer });
@@ -127,6 +130,11 @@ export function App({ store }: { store: Store }) {
                 </div>
             </div>
             <span className="toolbar-spacer" />
+            {overleaf.busy && <div className="toolbar-status">
+                <span className="spinner" aria-hidden="true" />
+                <span className="toolbar-status-text" role="status" title={overleaf.status}>{overleaf.status}</span>
+                <button className="status-cancel" aria-label="Cancel Overleaf operation" title="Cancel" onClick={() => store.overleaf.dispatch({ type: "CANCEL" })}><BsX aria-hidden="true" /></button>
+            </div>}
             {(state.busy || (documentData && !missing.size)) && <div className="toolbar-status">
                 {state.busy ? <span className="spinner" aria-hidden="true" /> : <BsFonts aria-hidden="true" />}
                 <span className="toolbar-status-text" role="status" title={state.busy ? state.status : state.syntheticBoldFonts.map(font => `${fontLabel(font)} (synthesized)`).join(", ")}>{state.busy ? state.status
@@ -141,6 +149,7 @@ export function App({ store }: { store: Store }) {
                     <button className={missing.size ? "attention" : ""} onClick={openFonts}><BsFonts aria-hidden="true" />Fonts</button>
                     <button disabled={!documentData} onClick={() => setDialog("source")}><BsCodeSlash aria-hidden="true" />View source SVG</button>
                     <button onClick={() => setDialog("history")}><BsClockHistory aria-hidden="true" />Save history</button>
+                    <button onClick={() => { setDialog("overleaf"); store.overleaf.dispatch({ type: "INIT" }); }}><BsCloudArrowUp aria-hidden="true" />Overleaf…</button>
                     <button onClick={() => setDialog("about")}><BsInfoCircle aria-hidden="true" />About kuroko 2</button>
                 </ApplicationMenu>
             </div>
@@ -198,6 +207,9 @@ export function App({ store }: { store: Store }) {
         {dialog === "fonts" && <Dialog title="Fonts" onClose={() => setDialog(null)}>
             <FontSetup state={state} onAllow={() => store.dispatch({ type: "ALLOW_FONT_ACCESS" })}
                 onChooseFolder={() => fontFolderInput.current?.click()} onChooseFiles={() => fontInput.current?.click()} />
+        </Dialog>}
+        {dialog === "overleaf" && <Dialog title="Overleaf" onClose={() => { store.overleaf.dispatch({ type: "DISMISS_CONFIRM" }); setDialog(null); }}>
+            <OverleafPanel store={store.overleaf} pdf={state.pdf} preview={state.preview} fileName={state.fileName} conversionBusy={state.busy || state.saving} />
         </Dialog>}
         {dialog === "source" && documentData && <Dialog title="Source SVG" onClose={() => setDialog(null)}>
             <p>Original SVG from {state.source}</p>

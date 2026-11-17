@@ -11,7 +11,7 @@ kuroko 2 は、PowerPoint や Execel でコピーした図を PDF として保�
 - 特徴
     - 図形や文字をベクターのまま保存するので、拡大しても鮮明です。影などの効果は画像として保存される場合があります。
     - PDF のページサイズはコピーした図のサイズに合わせられます。
-    - 処理はすべて手元のブラウザ上で行われ、サーバーにはアップロードされません。
+    - PDF への変換は手元のブラウザ上で行います。Overleaf への送信は、アップロードを選んだ場合だけ行います。
     - これは、[従来の Kuroko](https://github.com/shioyadan/kuroko) をブラウザで使えるようにしたものです。Electron や「Microsoft Print to PDF」プリンターは不要です。
 
 
@@ -25,7 +25,7 @@ kuroko 2 は、PowerPoint や Execel でコピーした図を PDF として保�
 
 ファイル名はメニュー左側で編集できます。Fit to window とプレビュー倍率の選択も上部ツールバーにあります。
 
-SVG ファイルを直接開くことや、ウィンドウへドラッグ＆ドロップすることもできます。右上のメニュー（☰）には Open SVG、Fonts、View source SVG、Save history、About kuroko 2 をまとめています。
+SVG ファイルを直接開くことや、ウィンドウへドラッグ＆ドロップすることもできます。右上のメニュー（☰）には Open SVG、Fonts、View source SVG、Save history、Overleaf、About kuroko 2 をまとめています。
 クリップボードの読み取り・PDF 作成・プレビュー描画の進捗は、ツールバー右上に表示します。横の × で処理をキャンセルできます。
 
 
@@ -60,6 +60,20 @@ Chrome・Edge の保存ダイアログは、直近に保存が成功した PDF �
 
 メニュー → Save history から履歴の削除や、自動提案のオン・オフを切り替えられます。この機能で保存した直近 30 件を記憶する方式で、PC 内の既存 PDF を自動で探すものではありません。履歴を削除しても PDF ファイルは削除されません。履歴はブラウザとサイトごとに、この端末内だけに保存されます。
 ダウンロード方式のブラウザでは、以前のファイルへの自動上書きやダウンロード完了の確認はできず、同名ファイルの扱いはブラウザに従います。
+
+
+### Overleaf と接続する
+
+ローカル起動では、生成した PDF を Overleaf のプロジェクトにアップロードしたり、プロジェクト内の PDF を取得してプレビュー・ダウンロードしたりできます。Python 3 と Git が必要です。Windows では WSL から起動してください。この機能は起動スクリプトが表示する URL で使えます。Web 版や、HTML を直接開いた場合は利用できません。
+
+1. Overleaf のプロジェクトで Git 接続を利用できることを確認し、起動元で使う Git の認証を設定します。Overleaf は HTTPS 接続で、ユーザー名 `git` と Git 認証トークンを使います。SSH 鍵や `ssh-add` は使いません。[Overleaf の認証ガイド](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens)に従って Git の credential helper を設定し、`git ls-remote <Git URL>` が入力を求めずに成功する状態にしてください。Git 接続には[対応する Overleaf のプラン](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration)が必要です。
+2. オフライン版の ZIP を展開し、そのフォルダーで `./kuroko2.sh` を実行します。表示された URL（通常は `http://127.0.0.1:30080/`）を開きます。
+3. メニュー → Overleaf でプロジェクトの Git URL を入力し、Connect をクリックします。`https://git.overleaf.com/<project-id>` のような URL だけを入力し、トークンは含めないでください。
+4. 一覧で PDF を選ぶと、最初のページをプレビューできます。Download PDF でダウンロードできます。生成した図をアップロードする場合は `figures/figure.pdf` のようなプロジェクト内の相対パスを入力し、Upload PDF をクリックします。一覧で既存の PDF を選ぶと、そのパスを再利用できます。上書きする場合は Replace PDF で確認します。
+
+アップロード時は、指定した PDF だけを変更してコミット・push します。選択後に Overleaf 側で同じファイルが変更されていた場合は、更新後の PDF を確認してから再度確定してください。PDF のバイト列が同じなら新たなコミットは作りません。Refresh でプロジェクトの最新状態を取得できます。アップロードは、ローカル保存の Save history とは別に扱います。
+
+プロジェクト内の PDF をプレビューしても、貼り付けた図は保持されます。一覧に出るのはプロジェクトに保存された PDF で、Overleaf がコンパイルした論文 PDF は含みません。起動スクリプトが動いている間は、ブラウザを再読み込みしても接続を復元できます。Disconnect またはスクリプトの終了で、一時的なローカル clone を削除します。認証情報は Git が管理し、HTML には入力・保存しません。
 
 
 ## 制約・困ったとき

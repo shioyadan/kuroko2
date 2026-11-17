@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Konata と同様、配布 HTML だけを localhost に公開する。
+# 配布 HTML と、ローカル Git を使う Overleaf 接続を localhost に公開する。
 set -eu
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 if [ -f "$script_dir/index.html" ]; then
@@ -18,17 +18,4 @@ if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
 fi
 echo "kuroko 2 URL: http://127.0.0.1:$port/"
 echo "Press Ctrl+C to stop the server."
-python3 -c '
-import http.server
-import sys
-import urllib.parse
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def translate_path(self, url):
-        return sys.argv[2]
-    def send_head(self):
-        if urllib.parse.urlsplit(self.path).path not in ("/", "/index.html"):
-            self.send_error(404)
-            return None
-        return super().send_head()
-http.server.test(Handler, port=int(sys.argv[1]), bind="127.0.0.1")
-' "$port" "$index_file"
+exec python3 "$script_dir/kuroko2_server.py" --port "$port" --index "$index_file"

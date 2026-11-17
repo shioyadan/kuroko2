@@ -11,7 +11,7 @@ A typical use is preparing figures for LaTeX papers and presentations.
 - Features
     - Shapes and text stay sharp as vectors. Effects such as shadows may be saved as images.
     - Each PDF page is sized to fit the copied figure.
-    - All processing happens locally in your browser. Nothing is uploaded to a server.
+    - PDF conversion happens locally in your browser. PDFs are sent to Overleaf only when you choose to upload them.
     - This is a browser-based successor to the [original Kuroko](https://github.com/shioyadan/kuroko). It does not require Electron or the Microsoft Print to PDF printer.
 
 
@@ -26,7 +26,7 @@ A typical use is preparing figures for LaTeX papers and presentations.
 The file name is editable just to the left of the menu. Fit to window and the preview zoom selector are also in the top toolbar.
 
 You can open an SVG file directly or drag it into the window. The menu (☰) at the
-top right contains Open SVG, Fonts, View source SVG, Save history and About kuroko 2.
+top right contains Open SVG, Fonts, View source SVG, Save history, Overleaf and About kuroko 2.
 Clipboard reading, PDF creation and preview rendering progress appear at the top
 right of the toolbar. Use the × beside the progress message to cancel.
 
@@ -85,6 +85,41 @@ it does not scan existing PDFs on your computer. Clearing history does not delet
 PDF files. History is specific to the browser and site, and stays on your device.
 In browsers that only download files, kuroko 2 cannot overwrite an earlier download
 or know whether the download finished; the browser controls duplicate names.
+
+
+### Using Overleaf
+
+The local launcher can upload your generated PDF to an Overleaf project, or
+download and preview PDFs already stored there. It requires Python 3 and Git;
+on Windows, run it in WSL. This feature is available from the launcher's URL,
+not from the hosted web app or an HTML file opened directly.
+
+1. Enable Git access for your Overleaf project and configure authentication in the
+   Git installation used by the launcher. Overleaf uses HTTPS with the username
+   `git` and a Git authentication token; SSH keys and `ssh-add` are not used.
+   Follow [Overleaf's authentication guide](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens)
+   to set up a Git credential helper. Confirm that `git ls-remote <Git URL>` works
+   without prompting before connecting from kuroko 2. Git access requires an
+   [eligible Overleaf plan](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration).
+2. Extract the offline ZIP and run `./kuroko2.sh` from its folder. Open the printed
+   URL, normally `http://127.0.0.1:30080/`.
+3. Open Menu → Overleaf, enter the project's Git URL, and click Connect. Enter
+   only the URL, such as `https://git.overleaf.com/<project-id>`, without a token.
+4. Select a project PDF to preview its first page or Download PDF. To upload your
+   generated figure, enter a relative path such as `figures/figure.pdf` and click
+   Upload PDF. Selecting an existing PDF also fills in its path; Replace PDF
+   asks you to confirm before overwriting it.
+
+Each upload commits and pushes only the chosen PDF. If the destination changed
+on Overleaf after you selected it, review the updated PDF and confirm again.
+Identical PDF bytes do not create another commit. Refresh retrieves the latest
+project files. Uploads are separate from the local Save history.
+
+The current pasted figure stays available while you preview a project PDF.
+Only PDFs stored in the project are listed; Overleaf's compiled document is not
+included. Connection state survives a browser reload while the launcher is
+running. Disconnect or stop the launcher to remove its temporary local clone.
+Credentials remain managed by Git, and are not entered or stored in the HTML app.
 
 
 ## Known limitations and troubleshooting
