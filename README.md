@@ -103,7 +103,8 @@ not from the hosted web app or an HTML file opened directly.
    [eligible Overleaf plan](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration).
 2. Extract the offline ZIP and run `./kuroko2.sh` from its folder. Keep
    `kuroko2.sh` and `index.html` together; the server is included in the script.
-   Open the printed URL, normally `http://127.0.0.1:30080/`.
+   Open the printed URL, normally `http://127.0.0.1:30080/`. If that port is
+   occupied, it uses the next available port and prints the new URL.
 3. Paste a figure and click Upload to Overleaf beside Save PDF. This button
    appears when the local launcher is available. If you are not connected, select
    a recent project or enter its Git URL and click Connect. Enter only the URL,
@@ -122,6 +123,7 @@ Rename changes it; saving an empty name returns to displaying the URL alone.
 Names also appear while connected and are kept when you reopen the app. They do
 not rename the project on Overleaf. Forget URL removes the entry from this list.
 Connecting to a project still requires your click.
+If the launcher uses a different port, that address has separate browser history.
 
 After you upload a figure, the next similar figure can suggest the same destination
 when you open Upload to Overleaf. The dialog shows the full path and a previous

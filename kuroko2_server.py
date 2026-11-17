@@ -2,6 +2,7 @@
 """Serve the single HTML app and bridge its Overleaf requests to local Git."""
 
 import argparse
+import errno
 from contextlib import contextmanager
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -599,6 +600,17 @@ def make_server(index_file, port=0, bridge=None):
     return server
 
 
+def make_available_server(index_file, port):
+    for candidate in range(port, 65536):
+        try:
+            return make_server(index_file, candidate)
+        except OSError as error:
+            if error.errno != errno.EADDRINUSE:
+                raise
+    raise OSError(errno.EADDRINUSE, f"No available port between {port} and 65535.")
+
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--index", required=True, type=Path)
@@ -613,7 +625,17 @@ def main():
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, stop)
-    with make_server(args.index, args.port) as server:
+    try:
+        server = make_available_server(args.index, args.port)
+    except OSError as error:
+        parser.exit(1, f"Could not start the local server: {error}\n")
+    with server:
+        if server.server_port != args.port:
+            print(f"Port {args.port} is in use; using port {server.server_port}.", flush=True)
+        print(f"kuroko 2 URL: http://127.0.0.1:{server.server_port}/", flush=True)
+        print("Press Ctrl+C to stop the server.", flush=True)
+        if os.environ.get("KUROKO_DEBUG") == "1":
+            print("Git debugging is enabled. Commands and results appear in this terminal.", flush=True)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

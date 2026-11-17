@@ -16,9 +16,5 @@ if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
     echo "KUROKO_PORT must be an integer from 1 to 65535." >&2
     exit 1
 fi
-echo "kuroko 2 URL: http://127.0.0.1:$port/"
-echo "Press Ctrl+C to stop the server."
-if [ "${KUROKO_DEBUG:-0}" = "1" ]; then
-    echo "Git debugging is enabled. Commands and results appear in this terminal."
-fi
+# Python binds an available port before printing the actual URL.
 exec python3 "$script_dir/kuroko2_server.py" --port "$port" --index "$index_file"

@@ -21,7 +21,9 @@ make serve     # Development server: http://127.0.0.1:8080
 ./kuroko2.sh   # Built HTML + local Overleaf bridge: http://127.0.0.1:30080
 ```
 
-`kuroko2.sh` requires Python 3; `KUROKO_PORT` overrides its port. Overleaf access
+`kuroko2.sh` requires Python 3; `KUROKO_PORT` sets its starting port (default 30080).
+The launcher skips occupied ports up to 65535 and prints its actual URL after
+binding. Other startup errors are reported without trying a different port. Overleaf access
 also requires Git with authentication already configured in the same environment.
 On Windows, run the launcher in WSL. A plain static server is sufficient for PDF
 conversion, but does not provide the Overleaf API.
