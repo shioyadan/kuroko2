@@ -104,22 +104,43 @@ not from the hosted web app or an HTML file opened directly.
 2. Extract the offline ZIP and run `./kuroko2.sh` from its folder. Keep
    `kuroko2.sh` and `index.html` together; the server is included in the script.
    Open the printed URL, normally `http://127.0.0.1:30080/`.
-3. Open Menu → Overleaf, enter the project's Git URL, and click Connect. Enter
-   only the URL, such as `https://git.overleaf.com/<project-id>`, without a token.
-4. Select a project PDF to preview its first page or Download PDF. To upload your
-   generated figure, enter a relative path such as `figures/figure.pdf` and click
-   Upload PDF. Selecting an existing PDF also fills in its path; Replace PDF
-   asks you to confirm before overwriting it.
+3. Paste a figure and click Upload to Overleaf beside Save PDF. This button
+   appears when the local launcher is available. If you are not connected, select
+   a recent project or enter its Git URL and click Connect. Enter only the URL,
+   such as `https://git.overleaf.com/<project-id>`, without a token.
+4. Choose a folder and file name in the save dialog, check the preview, then click
+   Upload PDF. Figure to upload always shows your current figure on the left.
+   Selecting an existing PDF fills in its name and shows its first page on the
+   right, under Currently in Overleaf. New destinations show Save as a new file.
+   Replace PDF asks you to confirm with both previews in the same positions. The dialog closes
+   after a successful upload. You can also enter a relative path such as
+   `new-folder/figure.pdf` to create a new destination.
+
+The last 10 successfully connected project URLs are remembered in this browser.
+In Recent projects, click Name to give a project a display name, then Save name.
+Rename changes it; saving an empty name returns to displaying the URL alone.
+Names also appear while connected and are kept when you reopen the app. They do
+not rename the project on Overleaf. Forget URL removes the entry from this list.
+Connecting to a project still requires your click.
+
+After you upload a figure, the next similar figure can suggest the same destination
+when you open Upload to Overleaf. The dialog shows the full path and a previous
+preview, and you can choose another folder or name. Suggestions use the last 30
+uploads, scoped to the connected project. Files changed or deleted on Overleaf
+are excluded. Only paths, figure descriptors and previews are remembered, not full
+PDFs or tokens. Storage is separate from local Save history and belongs to this
+browser and site. If browser storage is unavailable, history lasts for this session.
 
 Each upload commits and pushes only the chosen PDF. If the destination changed
 on Overleaf after you selected it, review the updated PDF and confirm again.
 Identical PDF bytes do not create another commit. Refresh retrieves the latest
-project files. Uploads are separate from the local Save history.
+project files. Menu → Overleaf also opens the project browser, where Download PDF
+saves the selected project PDF locally.
 
 The current pasted figure stays available while you preview a project PDF.
 Only PDFs stored in the project are listed; Overleaf's compiled document is not
 included. Connection state survives a browser reload while the launcher is
-running. Disconnect or stop the launcher to remove its temporary local clone.
+running. Change project or stop the launcher to remove its temporary local clone.
 Credentials remain managed by Git, and are not entered or stored in the HTML app.
 
 If a normal Overleaf fetch works but kuroko 2 cannot connect, restart the launcher

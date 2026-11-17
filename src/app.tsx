@@ -37,6 +37,7 @@ export function App({ store }: { store: Store }) {
     const [warning, setWarning] = useState(false);
     const logOpenRef = useRef(false);
     const logID = useRef(0);
+    useEffect(() => { store.overleaf.dispatch({ type: "PROBE" }); }, [store]);
     useEffect(() => {
         if (dialog === "fonts" && closeFontsWhenReady.current && state.pdf && !state.busy && !state.missingFonts.length) {
             closeFontsWhenReady.current = false;
@@ -98,6 +99,8 @@ export function App({ store }: { store: Store }) {
     const filesSelected = (input: HTMLInputElement, directory = false) => {
         store.dispatch({ type: "ADD_FONTS", files: [...(input.files ?? [])], directory }); input.value = "";
     };
+    const openOverleaf = () => { setDialog("overleaf"); store.overleaf.dispatch({ type: "INIT" }); };
+    const closeOverleaf = () => { store.overleaf.dispatch({ type: "DISMISS_CONFIRM" }); setDialog(null); };
 
     return <div className="kuroko-app" onDragStartCapture={event => {
         // Image drags and selection drags from previews must never become new input.
@@ -120,6 +123,7 @@ export function App({ store }: { store: Store }) {
             <div className="toolbar-actions">
                 <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
                 <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
+                {overleaf.available && <button className="overleaf-upload-button" onClick={openOverleaf} disabled={!state.pdf || state.busy || state.saving || overleaf.busy} title="Upload to Overleaf" aria-label="Upload to Overleaf"><BsCloudArrowUp /> <span>Upload to Overleaf</span></button>}
             </div>
             <div className="toolbar-document">
                 <div className="zoom-controls">
@@ -149,7 +153,7 @@ export function App({ store }: { store: Store }) {
                     <button className={missing.size ? "attention" : ""} onClick={openFonts}><BsFonts aria-hidden="true" />Fonts</button>
                     <button disabled={!documentData} onClick={() => setDialog("source")}><BsCodeSlash aria-hidden="true" />View source SVG</button>
                     <button onClick={() => setDialog("history")}><BsClockHistory aria-hidden="true" />Save history</button>
-                    <button onClick={() => { setDialog("overleaf"); store.overleaf.dispatch({ type: "INIT" }); }}><BsCloudArrowUp aria-hidden="true" />Overleaf…</button>
+                    <button onClick={openOverleaf}><BsCloudArrowUp aria-hidden="true" />Overleaf…</button>
                     <button onClick={() => setDialog("about")}><BsInfoCircle aria-hidden="true" />About kuroko 2</button>
                 </ApplicationMenu>
             </div>
@@ -208,8 +212,8 @@ export function App({ store }: { store: Store }) {
             <FontSetup state={state} onAllow={() => store.dispatch({ type: "ALLOW_FONT_ACCESS" })}
                 onChooseFolder={() => fontFolderInput.current?.click()} onChooseFiles={() => fontInput.current?.click()} />
         </Dialog>}
-        {dialog === "overleaf" && <Dialog title="Overleaf" onClose={() => { store.overleaf.dispatch({ type: "DISMISS_CONFIRM" }); setDialog(null); }}>
-            <OverleafPanel store={store.overleaf} pdf={state.pdf} preview={state.preview} fileName={state.fileName} conversionBusy={state.busy || state.saving} />
+        {dialog === "overleaf" && <Dialog title="Upload to Overleaf" onClose={closeOverleaf}>
+            <OverleafPanel store={store.overleaf} pdf={state.pdf} preview={state.preview} fileName={state.fileName} conversionBusy={state.busy || state.saving} onClose={closeOverleaf} />
         </Dialog>}
         {dialog === "source" && documentData && <Dialog title="Source SVG" onClose={() => setDialog(null)}>
             <p>Original SVG from {state.source}</p>

@@ -1,5 +1,9 @@
 import { renderPdf } from "./core/pdf_preview";
 import { downloadBlob } from "./file_access";
+import type { FigureMemory } from "./core/figure_match";
+import { canonicalProjectUrl, loadOverleafHistory, MAX_OVERLEAF_HISTORY, MAX_RECENT_PROJECTS,
+    overleafDestinationSuggestions, projectDisplayName, putOverleafSavedFigure, readRecentProjects, writeRecentProjects,
+    type OverleafSavedFigure, type RecentOverleafProject } from "./overleaf_history";
 
 export interface OverleafFile { readonly path: string; readonly oid: string; readonly size: number }
 interface Project {
@@ -7,24 +11,34 @@ interface Project {
     session: string;
     url: string | null;
     files: OverleafFile[];
+    folders?: string[];
     result?: "uploaded" | "unchanged";
 }
 export interface OverleafSnapshot {
     readonly available: boolean | null;
     readonly url: string | null;
     readonly files: readonly OverleafFile[];
+    readonly folders: readonly string[];
+    readonly recentProjects: readonly RecentOverleafProject[];
+    readonly historyPersistent: boolean;
+    readonly suggestions: readonly OverleafSavedFigure[];
+    readonly savedRevision: number;
+    readonly lastSavedPath: string | null;
     readonly busy: boolean;
     readonly status: string;
     readonly error: string;
     readonly remote: { path: string; oid: string; bytes: Uint8Array<ArrayBuffer>; preview: string } | null;
     readonly confirmation: { path: string; expected: string; preview: string | null } | null;
 }
-type Upload = { path: string; pdf: Uint8Array<ArrayBuffer>; preview: string | null };
+type Upload = { path: string; pdf: Uint8Array<ArrayBuffer>; preview: string | null; memory: FigureMemory | null };
 type Action =
-    | { type: "INIT" | "REFRESH" | "DISCONNECT" | "DOWNLOAD" | "CONFIRM_UPLOAD" | "DISMISS_CONFIRM" | "CANCEL" }
+    | { type: "PROBE" | "INIT" | "REFRESH" | "DISCONNECT" | "DOWNLOAD" | "CONFIRM_UPLOAD" | "DISMISS_CONFIRM" | "CANCEL" }
     | { type: "CONNECT"; url: string }
+    | { type: "FORGET_PROJECT"; url: string }
+    | { type: "RENAME_PROJECT"; url: string; name: string }
+    | { type: "SET_FIGURE"; memory: FigureMemory | null }
     | { type: "SELECT"; path: string }
-    | ({ type: "PREPARE_UPLOAD" } & Upload);
+    | ({ type: "PREPARE_UPLOAD" } & Omit<Upload, "memory">);
 
 class BridgeError extends Error {
     constructor(message: string, readonly code: string) { super(message); }
@@ -33,12 +47,19 @@ class BridgeError extends Error {
 /** URL-only client. Credentials stay with the local Git credential helper. */
 export class OverleafStore {
     private state: OverleafSnapshot = {
-        available: null, url: null, files: [], busy: false, status: "", error: "", remote: null, confirmation: null
+        available: null, url: null, files: [], folders: [], recentProjects: [], historyPersistent: true,
+        suggestions: [], savedRevision: 0, lastSavedPath: null,
+        busy: false, status: "", error: "", remote: null, confirmation: null
     };
     private session = "";
     private operation: { id: string; controller: AbortController; rendering: boolean } | null = null;
     private pendingUpload: Upload | null = null;
+    private figure: FigureMemory | null = null;
+    private history: readonly OverleafSavedFigure[] = [];
+    private historyReady: Promise<void> | null = null;
+    private probing: Promise<void> | null = null;
     private readonly listeners = new Set<() => void>();
+    constructor(private readonly onSaved: (status: string) => void = () => {}) {}
     readonly getSnapshot = (): OverleafSnapshot => this.state;
     readonly subscribe = (listener: () => void): (() => void) => {
         this.listeners.add(listener);
@@ -48,14 +69,66 @@ export class OverleafStore {
         this.state = { ...this.state, ...patch };
         this.listeners.forEach(listener => listener());
     }
+    private historyError(error: unknown): void {
+        if (this.state.historyPersistent) console.warn(`Overleaf history is available for this session only: ${error instanceof Error ? error.message : String(error)}`);
+        this.publish({ historyPersistent: false });
+    }
+    private updateSuggestions(): void {
+        const project = canonicalProjectUrl(this.state.url);
+        this.publish({ suggestions: overleafDestinationSuggestions(this.figure, this.state.url, this.history, this.state.files),
+            lastSavedPath: this.history.find(record => record.project === project)?.path ?? null });
+    }
+    private ensureHistory(): Promise<void> {
+        if (!this.historyReady) {
+            try { this.publish({ recentProjects: readRecentProjects() }); } catch (error) { this.historyError(error); }
+            this.historyReady = loadOverleafHistory().then(history => {
+                this.history = history;
+                this.updateSuggestions();
+            }, error => this.historyError(error));
+        }
+        return this.historyReady;
+    }
+    private rememberProject(url: string): void {
+        const project = canonicalProjectUrl(url);
+        if (!project) return;
+        const existing = this.state.recentProjects.find(value => value.url === project);
+        const recentProjects = [existing ?? { url: project, name: "" }, ...this.state.recentProjects.filter(value => value.url !== project)].slice(0, MAX_RECENT_PROJECTS);
+        this.saveRecentProjects(recentProjects);
+    }
+    private saveRecentProjects(recentProjects: readonly RecentOverleafProject[]): void {
+        this.publish({ recentProjects });
+        try { writeRecentProjects(recentProjects); } catch (error) { this.historyError(error); }
+    }
+    private probe(): Promise<void> {
+        if (this.probing) return this.probing;
+        if (!/^https?:$/.test(location.protocol) || !["127.0.0.1", "localhost", "[::1]"].includes(location.hostname)) {
+            this.publish({ available: false, status: "Overleaf needs the local launcher.", error: "" });
+            return Promise.resolve();
+        }
+        // This only reads local process state. Never clone/fetch a project on startup.
+        this.probing = (async () => {
+            try {
+                this.project(await (await this.request("", {}, true)).json());
+                await this.ensureHistory();
+                if (this.state.url) this.rememberProject(this.state.url);
+                this.publish({ status: this.state.url ? "Overleaf project connected." : "Choose an Overleaf project to continue." });
+            } catch {
+                this.publish({ available: false, url: null, files: [], folders: [], remote: null, suggestions: [], error: "", status: "Overleaf needs the local launcher." });
+            }
+        })().finally(() => { this.probing = null; });
+        return this.probing;
+    }
     private project(value: Project): void {
         if (value.api !== "kuroko-overleaf-v1" || typeof value.session !== "string" || !Array.isArray(value.files)) {
             throw new Error("Open the URL printed by ./kuroko2.sh to use Overleaf.");
         }
         this.session = value.session;
+        const changedProject = canonicalProjectUrl(this.state.url) !== canonicalProjectUrl(value.url);
+        if (changedProject) this.clearConfirmation();
         const remote = this.state.remote;
-        this.publish({ available: true, url: value.url, files: value.files,
-            remote: remote && value.files.some(file => file.path === remote.path && file.oid === remote.oid) ? remote : null });
+        this.publish({ available: true, url: value.url, files: value.files, folders: value.folders ?? [],
+            remote: !changedProject && remote && value.files.some(file => file.path === remote.path && file.oid === remote.oid) ? remote : null });
+        this.updateSuggestions();
     }
     private async request(path: string, init: RequestInit = {}, bootstrap = false): Promise<Response> {
         const response = await fetch(`/api/overleaf${path}`, {
@@ -99,6 +172,16 @@ export class OverleafStore {
         });
     }
     dispatch(action: Action): void {
+        if (action.type === "SET_FIGURE") {
+            this.figure = action.memory;
+            this.clearConfirmation();
+            this.updateSuggestions();
+            return;
+        }
+        if (action.type === "PROBE") {
+            if (this.state.available === null) void this.probe();
+            return;
+        }
         if (action.type === "CANCEL") {
             const operation = this.operation;
             if (!operation) return;
@@ -113,19 +196,19 @@ export class OverleafStore {
         switch (action.type) {
             case "INIT":
                 this.clearConfirmation();
-                if (!/^https?:$/.test(location.protocol) || !["127.0.0.1", "localhost", "[::1]"].includes(location.hostname)) {
-                    this.publish({ available: false, status: "Overleaf needs the local launcher.", error: "" });
-                    break;
-                }
-                this.run("Checking the local Overleaf server…", async () => {
-                    try {
-                        this.project(await (await this.request("", {}, true)).json());
-                        this.publish({ status: this.state.url ? "Overleaf project connected." : "Enter an Overleaf Git URL to connect." });
-                    } catch {
-                        this.publish({ available: false, status: "Overleaf needs the local launcher.", error: "" });
-                    }
-                });
+                this.run("Checking the local Overleaf server…", () => this.probe());
                 break;
+            case "FORGET_PROJECT": {
+                const project = canonicalProjectUrl(action.url);
+                this.saveRecentProjects(this.state.recentProjects.filter(value => value.url !== project));
+                break;
+            }
+            case "RENAME_PROJECT": {
+                const project = canonicalProjectUrl(action.url);
+                this.saveRecentProjects(this.state.recentProjects.map(value => value.url === project
+                    ? { ...value, name: projectDisplayName(action.name) } : value));
+                break;
+            }
             case "CONNECT": {
                 const url = action.url.trim();
                 if (!/^https:\/\/(?:git@)?git\.overleaf\.com\/[a-f\d]{24}\/?$/i.test(url)) {
@@ -134,7 +217,9 @@ export class OverleafStore {
                 }
                 this.clearConfirmation();
                 this.run("Connecting to Overleaf…", async () => {
+                    await this.ensureHistory();
                     this.project(await this.json("/connect", { url }));
+                    if (this.state.url) this.rememberProject(this.state.url);
                     this.publish({ remote: null, status: "Overleaf project connected." });
                     console.info("Overleaf project connected.");
                 });
@@ -180,7 +265,7 @@ export class OverleafStore {
                     this.publish({ error: "Enter a relative PDF path, for example figures/figure.pdf." });
                     break;
                 }
-                const upload = { path, pdf: action.pdf, preview: action.preview };
+                const upload = { path, pdf: action.pdf, preview: action.preview, memory: this.figure };
                 const previous = this.state.files.find(file => file.path === path);
                 if (previous) {
                     this.pendingUpload = upload;
@@ -212,9 +297,22 @@ export class OverleafStore {
             const project: Project = await response.json();
             this.project(project);
             const file = project.files.find(file => file.path === upload.path);
+            if (!file || (project.result !== "uploaded" && project.result !== "unchanged")) throw new Error("The upload could not be confirmed. Refresh the project before trying again.");
+            await this.rememberUpload(upload, projectUrl, file.oid);
             this.publish({ status: project.result === "unchanged" ? `Already up to date: ${upload.path}` : `Uploaded to Overleaf: ${upload.path}`,
-                remote: file && upload.preview ? { ...file, bytes: upload.pdf, preview: upload.preview } : null });
+                remote: upload.preview ? { ...file, bytes: upload.pdf, preview: upload.preview } : null,
+                savedRevision: this.state.savedRevision + 1 });
             console.info(this.state.status);
+            this.onSaved(this.state.status);
         });
+    }
+    private async rememberUpload(upload: Upload, url: string, oid: string): Promise<void> {
+        const project = canonicalProjectUrl(url);
+        if (!upload.memory || !project) return;
+        await this.ensureHistory();
+        const entry: OverleafSavedFigure = { ...upload.memory, id: `${project}\n${upload.path}`, project, path: upload.path, oid, savedAt: Date.now() };
+        this.history = [entry, ...this.history.filter(record => record.project !== project || record.path !== upload.path)].slice(0, MAX_OVERLEAF_HISTORY);
+        this.updateSuggestions();
+        try { await putOverleafSavedFigure(entry); } catch (error) { this.historyError(error); }
     }
 }

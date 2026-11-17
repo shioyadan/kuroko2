@@ -56,13 +56,14 @@ export type Action =
     | { type: "CONVERT_FINISH"; id: number; bytes: Uint8Array<ArrayBuffer>; preview: string; memory: FigureMemory | null }
     | { type: "FAIL"; id: number; error: unknown }
     | { type: "SAVE_PROGRESS"; status: string }
+    | { type: "OVERLEAF_SAVED"; status: string }
     | { type: "SAVE_FINISH"; result?: SaveResult; error?: unknown };
 
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 function aborted(error: unknown): boolean { return error instanceof DOMException && error.name === "AbortError"; }
 
 export class Store {
-    readonly overleaf = new OverleafStore();
+    readonly overleaf = new OverleafStore(status => this.dispatch({ type: "OVERLEAF_SAVED", status }));
     private state: StoreSnapshot = {
         document: null, pdf: null, preview: null, busy: false, saving: false, saveFailed: false,
         status: "Copy a figure in PowerPoint, then paste it here.", error: "", missingFonts: [], syntheticBoldFonts: [], loadedFonts: [], fontAccess: "unknown", fontLoading: false,
@@ -126,6 +127,7 @@ export class Store {
             }
             case "LOAD_FINISH":
                 this.memory = null; this.nameEdited = false; this.promptForDocument = true;
+                this.overleaf.dispatch({ type: "SET_FIGURE", memory: null });
                 this.publish({ document: action.document, pdf: null, preview: null, missingFonts: this.fonts.missing(action.document.fonts), syntheticBoldFonts: this.fonts.syntheticBold(action.document.fonts), source: action.source });
                 action.document.warnings.forEach(warning => console.warn(warning));
                 console.info(`SVG loaded: ${action.source}; ${action.document.width.toFixed(1)} × ${action.document.height.toFixed(1)} CSS px.`);
@@ -156,6 +158,7 @@ export class Store {
                 break;
             case "CONVERT_FINISH":
                 this.memory = action.memory;
+                this.overleaf.dispatch({ type: "SET_FIGURE", memory: action.memory });
                 const suggestions = action.memory ? matchingFigures(action.memory.fingerprint, this.state.history) : [];
                 this.publish({ busy: false, pdf: action.bytes, preview: action.preview, error: "", status: `PDF ready · ${(action.bytes.length / 1024).toFixed(1)} KiB`,
                     suggestions, suggestionOpen: this.promptForDocument && this.state.suggestNames && !this.nameEdited && suggestions.length > 0 });
@@ -199,6 +202,9 @@ export class Store {
                 break;
             case "SAVE_PROGRESS":
                 if (this.state.saving) { this.publish({ status: action.status }); console.info(action.status); }
+                break;
+            case "OVERLEAF_SAVED":
+                if (!this.state.busy && !this.state.saving) this.publish({ status: action.status });
                 break;
             case "SAVE_FINISH":
                 this.publish({ saving: false });

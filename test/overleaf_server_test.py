@@ -93,6 +93,21 @@ class GitFixture(unittest.TestCase):
 
 
 class BridgeTests(GitFixture):
+    def test_folders_include_destinations_without_existing_pdfs(self):
+        self.write("sections/introduction.tex", b"Introduction\n")
+        self.write("assets/diagrams/source.svg", b"<svg/>\n")
+        self.write("日本語 図/reference.txt", b"A folder with no PDFs yet\n")
+        self.commit_and_push()
+        snapshot = self.connect()
+        self.assertEqual(snapshot["folders"], ["assets", "assets/diagrams", "figures", "sections", "日本語 図"])
+        self.assertEqual({item["path"] for item in snapshot["files"]},
+                         {"figures/existing.pdf", "figures/日本語 space.PDF"})
+        result = self.bridge.upload("assets/diagrams/new.pdf", "", EDITED_PDF)
+        self.assertEqual(result["result"], "uploaded")
+        self.assertEqual(self.contents("assets/diagrams/new.pdf"), EDITED_PDF)
+        self.assertEqual(self.contents("assets/diagrams/source.svg"), b"<svg/>\n")
+
+
     def test_list_and_read_only_pdf_blobs(self):
         self.assertIsNone(self.bridge.snapshot()["url"])
         snapshot = self.connect()
@@ -100,6 +115,7 @@ class BridgeTests(GitFixture):
         self.assertTrue(snapshot["session"])
         self.assertEqual({item["path"] for item in snapshot["files"]},
                          {"figures/existing.pdf", "figures/日本語 space.PDF"})
+        self.assertEqual(snapshot["folders"], ["figures"])
         self.assertEqual(self.bridge.read_pdf("figures/existing.pdf", self.oid()), PDF)
         self.assert_rejected(lambda: self.bridge.read_pdf("paper.tex", self.oid()))
 
@@ -176,6 +192,8 @@ class BridgeTests(GitFixture):
         self.commit_and_push()
         snapshot = self.connect()
         self.assertNotIn("shortcut.pdf", [item["path"] for item in snapshot["files"]])
+        self.assertEqual(snapshot["folders"], ["figures", "folder.pdf"])
+        self.assertNotIn("alias", snapshot["folders"])
         before = self.head()
         for path in ["alias/new.pdf", "shortcut.pdf", "folder.pdf", "paper.tex/new.pdf"]:
             with self.subTest(path=path):
@@ -189,6 +207,7 @@ class BridgeTests(GitFixture):
         snapshot = self.bridge.disconnect()
         self.assertIsNone(snapshot["url"])
         self.assertEqual(snapshot["files"], [])
+        self.assertEqual(snapshot["folders"], [])
         self.assertEqual(self.head(), before)
         self.assert_rejected(lambda: self.bridge.upload("figure.pdf", "", EDITED_PDF))
 

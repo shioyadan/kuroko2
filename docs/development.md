@@ -90,6 +90,7 @@ toolbar and paste/save flow follow the original Kuroko.
 | `src/app.tsx`, `src/components/` | Toolbar, preview, dialogs and bounded, resizable console log pane |
 | `src/store.ts` | Input, font resolution, conversion, cancellation and saving |
 | `src/overleaf.ts` | Overleaf connection, previews, upload confirmation and cancellation |
+| `src/overleaf_history.ts` | Named recent projects and project-specific upload destination suggestions |
 | `kuroko2_server.py` | Loopback HTTP server and temporary Git repository for Overleaf |
 | `src/core/clipboard.ts` | Paste events, Async Clipboard API and UTF-8/UTF-16 decoding |
 | `src/core/svg.ts` | SVG validation/sanitization, dimensions and required fonts |
@@ -199,8 +200,11 @@ timeouts. Non-Office filters are handled by krilla-svg.
 
 The launcher serves only `/`, `/index.html`, and `/api/overleaf` routes using
 Python's standard library. The browser makes same-origin requests; no CORS proxy,
-Node server, or additional Python package is needed. It detects the API only
-when Menu → Overleaf is opened. Conversion remains entirely in the single HTML.
+Node server, or additional Python package is needed. On a loopback HTTP origin it
+probes local API state at startup and shows Upload to Overleaf beside Save PDF
+when available. The probe does not run Git or connect to a remote project.
+Hosted and file URLs do not probe localhost. Conversion remains entirely in the
+single HTML.
 
 The server binds to `127.0.0.1`, validates Host and Origin, and requires a random
 process session header for all project operations. It accepts only Overleaf HTTPS
@@ -230,7 +234,24 @@ timeout. Disconnect and server shutdown remove the temporary clone.
 
 The separate Overleaf Store keeps project PDF previews from replacing the pasted
 figure. It uses the existing PDFium worker to render page one. PDF downloads use
-the browser download mechanism. Overleaf uploads do not add local-save history.
+the browser download mechanism. The upload dialog offers folder navigation, a
+file name field, full destination path and separate overwrite confirmation, and
+closes after a confirmed successful upload. The upload figure remains in the left
+preview; the right preview follows the destination path, including typed names.
+New destinations have an explicit empty state, and confirmation preserves this layout.
+
+Up to 10 successfully connected, normalized project URLs and optional display names
+are stored as `{url, name}` records in localStorage. Legacy URL-only arrays are read
+as unnamed projects. Names are limited to 100 characters, kept across reconnects,
+and never sent to the Git bridge. URLs containing credentials or query parameters
+are rejected. The separate
+`kuroko.overleafHistory` IndexedDB database stores up to 30 successful destinations
+with project URL, path, blob ID, timestamp, thumbnail and the existing figure
+fingerprint. It reuses `matchingFigures` and excludes other projects and files
+whose current blob ID differs or is missing. Suggestions are offered in the upload
+dialog and never authorize a write. Failed/cancelled uploads add no history.
+Storage failures retain session state without blocking uploads. Full PDFs and
+tokens are not persisted, and local Save history is unchanged.
 
 `test/overleaf_server_test.py` uses isolated temporary bare Git repositories and
 HTTP requests to check uploads, conflicts, path checks and server boundaries.

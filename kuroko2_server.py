@@ -129,11 +129,21 @@ class OverleafBridge:
 
     def snapshot(self):
         with self._state_lock:
+            folders = []
+            for path, entry in self._entries.items():
+                if entry["mode"] != "040000":
+                    continue
+                try:
+                    self.validate_path(path + "/figure.pdf")
+                except BridgeError:
+                    continue
+                folders.append(path)
             return {
                 "api": API_VERSION,
                 "session": self.session,
                 "url": self._url,
                 "files": [dict(file) for file in self._files],
+                "folders": sorted(folders),
             }
 
     @contextmanager

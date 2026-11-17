@@ -8,11 +8,11 @@ kuroko 2 は、PowerPoint や Execel でコピーした図を PDF として保�
 - 使い方
     - **[Web 版を開く](https://shioyadan.github.io/kuroko2/)** — インストールは不要です。
     - [オフライン版をダウンロード](https://shioyadan.github.io/kuroko2/kuroko-latest.zip) — ZIP を展開して `index.html` を開いてください。
+        - Overleaf へのアップロード機能を使うためにはオフライン版が必要です。
 - 特徴
     - 図形や文字をベクターのまま保存するので、拡大しても鮮明です。影などの効果は画像として保存される場合があります。
-    - PDF のページサイズはコピーした図のサイズに合わせられます。
-    - PDF への変換は手元のブラウザ上で行います。Overleaf への送信は、アップロードを選んだ場合だけ行います。
-    - これは、[従来の Kuroko](https://github.com/shioyadan/kuroko) をブラウザで使えるようにしたものです。Electron や「Microsoft Print to PDF」プリンターは不要です。
+    - PDF への変換は手元のブラウザ上に完全に閉じて行い、一切サーバー等と通信しません。
+        - Overleaf への送信はローカルで動作する git コマンドを介して行います。この場合のみ、ローカルで立ち上げたサーバーと通信します。
 
 
 ## 使い方
@@ -68,12 +68,16 @@ Chrome・Edge の保存ダイアログは、直近に保存が成功した PDF �
 
 1. Overleaf のプロジェクトで Git 接続を利用できることを確認し、起動元で使う Git の認証を設定します。Overleaf は HTTPS 接続で、ユーザー名 `git` と Git 認証トークンを使います。SSH 鍵や `ssh-add` は使いません。[Overleaf の認証ガイド](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens)に従って Git の credential helper を設定し、`git ls-remote <Git URL>` が入力を求めずに成功する状態にしてください。Git 接続には[対応する Overleaf のプラン](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration)が必要です。
 2. オフライン版の ZIP を展開し、そのフォルダーで `./kuroko2.sh` を実行します。`kuroko2.sh` と `index.html` は同じフォルダーに置いてください。サーバー部分はスクリプトに含まれています。表示された URL（通常は `http://127.0.0.1:30080/`）を開きます。
-3. メニュー → Overleaf でプロジェクトの Git URL を入力し、Connect をクリックします。`https://git.overleaf.com/<project-id>` のような URL だけを入力し、トークンは含めないでください。
-4. 一覧で PDF を選ぶと、最初のページをプレビューできます。Download PDF でダウンロードできます。生成した図をアップロードする場合は `figures/figure.pdf` のようなプロジェクト内の相対パスを入力し、Upload PDF をクリックします。一覧で既存の PDF を選ぶと、そのパスを再利用できます。上書きする場合は Replace PDF で確認します。
+3. 図を貼り付け、Save PDF の隣にある Upload to Overleaf をクリックします。このボタンはローカル起動が利用できる場合に表示されます。未接続なら、履歴からプロジェクトを選ぶか Git URL を入力し、Connect をクリックします。`https://git.overleaf.com/<project-id>` のような URL だけを入力し、トークンは含めないでください。
+4. 保存先選択画面でフォルダーとファイル名を選び、プレビューを確認して Upload PDF をクリックします。左の Figure to upload には今回アップロードする図を常に表示します。既存の PDF を選ぶと、その名前が入り、右の Currently in Overleaf に保存先の最初のページを表示します。新規保存なら Save as a new file. と表示します。上書きする場合は、両方のプレビューを同じ配置で見ながら Replace PDF で確認します。アップロードに成功すると画面が閉じます。`new-folder/figure.pdf` のような相対パスを入力して、新しい保存先を作ることもできます。
 
-アップロード時は、指定した PDF だけを変更してコミット・push します。選択後に Overleaf 側で同じファイルが変更されていた場合は、更新後の PDF を確認してから再度確定してください。PDF のバイト列が同じなら新たなコミットは作りません。Refresh でプロジェクトの最新状態を取得できます。アップロードは、ローカル保存の Save history とは別に扱います。
+接続に成功した直近10件のプロジェクト URL を、このブラウザ内に記憶します。Recent projects の Name から表示名を付け、Save name で保存できます。Rename で変更し、空欄で保存すると URL だけの表示に戻ります。名前は接続中も表示され、アプリを開き直しても残ります。Overleaf 側のプロジェクト名は変更しません。Forget URL で一覧から削除できます。接続にはクリックが必要です。
 
-プロジェクト内の PDF をプレビューしても、貼り付けた図は保持されます。一覧に出るのはプロジェクトに保存された PDF で、Overleaf がコンパイルした論文 PDF は含みません。起動スクリプトが動いている間は、ブラウザを再読み込みしても接続を復元できます。Disconnect またはスクリプトの終了で、一時的なローカル clone を削除します。認証情報は Git が管理し、HTML には入力・保存しません。
+一度図をアップロードすると、似た図で Upload to Overleaf を開いたときに、以前の保存先を候補として表示します。候補のフルパスと以前のプレビューを確認し、別のフォルダーや名前も選べます。直近30件のアップロードを使い、接続中のプロジェクトの中だけで推定します。Overleaf 側で変更・削除されたファイルは候補から除きます。記憶するのは保存先、図の特徴、プレビューで、PDF 本体やトークンは保存しません。履歴はローカル保存の Save history とは別に、ブラウザとサイトごとに保存します。ブラウザの保存領域を利用できない場合は、開いている間だけ記憶します。
+
+アップロード時は、指定した PDF だけを変更してコミット・push します。選択後に Overleaf 側で同じファイルが変更されていた場合は、更新後の PDF を確認してから再度確定してください。PDF のバイト列が同じなら新たなコミットは作りません。Refresh でプロジェクトの最新状態を取得できます。メニュー → Overleaf からもプロジェクト内を閲覧でき、Download PDF で選択した PDF を手元に保存できます。
+
+プロジェクト内の PDF をプレビューしても、貼り付けた図は保持されます。一覧に出るのはプロジェクトに保存された PDF で、Overleaf がコンパイルした論文 PDF は含みません。起動スクリプトが動いている間は、ブラウザを再読み込みしても接続を復元できます。Change project またはスクリプトの終了で、一時的なローカル clone を削除します。認証情報は Git が管理し、HTML には入力・保存しません。
 
 通常の Overleaf への fetch は成功するのに接続できない場合は、`KUROKO_DEBUG=1 ./kuroko2.sh` で起動し直し、再度 Connect を押してください。端末に Git コマンド、作業ディレクトリ、終了コード、エラー内容を表示します。認証情報を含む URL やヘッダーは伏せ、PDF 本体や Git 設定の値は表示しません。起動元の Git credential helper や `GIT_ASKPASS` は引き継ぎます。既存リポジトリの `.git/config` だけにある設定は、kuroko 2 が作る一時 clone には適用されません。
 
