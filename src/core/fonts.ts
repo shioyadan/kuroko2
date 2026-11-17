@@ -111,11 +111,9 @@ function faceMatches(face: FontFaceInfo, requirement: FontRequirement): boolean 
     return face.weight === requirement.weight && face.style === requirement.style && face.aliases.some(alias => normalizeFontFamily(alias) === normalizeFontFamily(requirement.family));
 }
 function syntheticBoldSource(requirement: FontRequirement): FontRequirement | undefined {
-    // Cambria Math ships only a regular face; Office can still request GDI's
-    // synthesized bold. Other families/styles stay strict until their rendering
-    // has been checked against a native reference as well.
-    return normalizeFontFamily(requirement.family) === "cambria math" && requirement.weight === 700 && requirement.style === "normal"
-        ? { ...requirement, weight: 400 } : undefined;
+    // Synthesize standard bold from the same family's regular-weight face,
+    // preserving italic style. Other weights still need an exact face.
+    return requirement.weight === 700 ? { ...requirement, weight: 400 } : undefined;
 }
 function hasGlyph(font: LoadedFont, face: FontFaceInfo, code: number): boolean {
     if (!face.cmap) return false;
@@ -189,8 +187,11 @@ export class FontRegistry {
     missing(requirements: readonly FontRequirement[]): FontRequirement[] {
         return requirements.filter(requirement => !this.match(requirement));
     }
+    missingExact(requirements: readonly FontRequirement[]): FontRequirement[] {
+        return requirements.filter(requirement => !this.exact(requirement));
+    }
     syntheticBold(requirements: readonly FontRequirement[]): FontRequirement[] {
-        return requirements.filter(requirement => !this.exact(requirement) && !!this.match(requirement));
+        return this.missingExact(requirements).filter(requirement => !!this.match(requirement));
     }
     async add(file: File): Promise<void> {
         if (file.size > MAX_FONT_BYTES) throw new Error(`${file.name}: Font exceeds 64 MiB.`);
@@ -257,7 +258,7 @@ export class FontRegistry {
         const attempted = new Set<string>();
         // Keep looking for a real bold face even when the regular face can be
         // synthesized. Catalog order must never choose synthesis over an exact face.
-        for (const requirement of requirements.filter(requirement => !this.exact(requirement))) {
+        for (const requirement of this.missingExact(requirements)) {
             for (const candidate of this.localCandidates(requirement.family)) {
                 if (attempted.has(candidate.postscriptName)) continue;
                 attempted.add(candidate.postscriptName);

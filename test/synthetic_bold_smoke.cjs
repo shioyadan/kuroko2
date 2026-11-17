@@ -86,10 +86,13 @@ async function checkSource(page, expected) {
     assert.equal(await dialog.getByLabel("Original SVG source", { exact: true }).inputValue(), expected);
     await dialog.getByRole("button", { name: "Close Source SVG", exact: true }).click();
 }
-const fontFile = (name, family, weight = 400) => ({ name, mimeType: "font/ttf", buffer: Buffer.from(fontMetadataFixture(family, weight)) });
+const fontFile = (name, family, weight = 400, options = {}) => ({ name, mimeType: "font/ttf", buffer: Buffer.from(fontMetadataFixture(family, weight, 0, options)) });
 
 (async () => {
     fs.mkdirSync(work, { recursive: true });
+    const fontFolder = fs.mkdtempSync(path.join(work, "synthetic-bold-folder-"));
+    fs.writeFileSync(path.join(fontFolder, "a-regular.ttf"), fontFile("regular.ttf", "Folder Family").buffer);
+    fs.writeFileSync(path.join(fontFolder, "z-bold.ttf"), fontFile("bold.ttf", "Folder Family", 700).buffer);
     const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || undefined, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
     try {
         const context = await browser.newContext({ acceptDownloads: true });
@@ -164,15 +167,59 @@ const fontFile = (name, family, weight = 400) => ({ name, mimeType: "font/ttf", 
         assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), true, "unavailable italic uses a substitute");
         const italicPdf = await inspectPdf(await save(page, "synthetic-bold-italic-substitute.pdf"));
         assert.equal(italicPdf.text, "P₀/H₀₁₃");
-        assert.ok(italicPdf.painted.every(item => (item.mode & 3) === 0), "substitution must not apply Cambria's synthetic stroke");
+        assert.ok(italicPdf.painted.every(item => (item.mode & 3) === 0), "synthesis must not turn an upright source face into an italic face");
+
+        await page.getByLabel("Select font files", { exact: true }).setInputFiles(fontFile("symbols-regular.ttf", "Segoe UI Symbol"));
+        await ready(page);
+        const symbols = svg('<text x="20" y="72" font-family="Segoe UI Symbol" font-weight="700" font-size="48">●<tspan font-weight="400">▲</tspan>★</text>');
+        await paste(page, symbols);
+        await ready(page);
+        assert.equal(await page.locator(".notice.font-warning").count(), 0, "an available symbol font supplies both regular and synthetic bold");
+        await page.getByLabel("Application menu", { exact: true }).click();
+        await page.getByRole("button", { name: "Fonts", exact: true }).click();
+        await fonts.locator("li").filter({ hasText: "Segoe UI Symbol 700" }).getByText("Synthesized bold", { exact: true }).waitFor();
+        await fonts.locator("li").filter({ hasText: "Segoe UI Symbol 400" }).getByText("Ready", { exact: true }).waitFor();
+        await page.screenshot({ path: path.join(work, "synthetic-bold-symbol-fonts.png") });
+        await fonts.getByRole("button", { name: "Close Fonts", exact: true }).click();
+        await checkSource(page, symbols);
+        const symbolsPdf = await inspectPdf(await save(page, "synthetic-bold-symbols.pdf"));
+        assert.equal(symbolsPdf.text, "●▲★");
+        for (const char of ["●", "★"]) assert.ok(symbolsPdf.painted.some(item => item.char === char && (item.mode & 3) === 2));
+        assert.ok(symbolsPdf.painted.filter(item => item.char === "▲").every(item => (item.mode & 3) === 0), "the regular symbol stays unstroked");
+
         await page.getByLabel("Select font files", { exact: true }).setInputFiles(fontFile("other-regular.ttf", "Other Family"));
+        await ready(page);
         await paste(page, bold.replace("Cambria Math", "Other Family"));
         await ready(page);
-        await page.locator(".notice.font-warning").filter({ hasText: "Missing fonts:" }).waitFor();
-        assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), true, "other families can use a substitute bold face");
-        const otherPdf = await inspectPdf(await save(page, "synthetic-bold-other-substitute.pdf"));
+        await toolbar.getByText("Fonts ready · synthesized bold", { exact: true }).waitFor();
+        assert.equal(await page.locator(".notice.font-warning").count(), 0);
+        const otherBytes = await save(page, "synthetic-bold-other.pdf");
+        const otherPdf = await inspectPdf(otherBytes);
         assert.equal(otherPdf.text, "P₀/H₀₁₃");
-        assert.ok(otherPdf.painted.every(item => (item.mode & 3) === 0), "other regular families do not gain Cambria's synthetic stroke");
+        assert.match(otherBytes.toString("latin1"), /Fixture-OtherFamily-Regular/);
+        assert.ok(otherPdf.painted.some(item => (item.mode & 3) === 2), "any family can synthesize bold from its own regular face");
+        assert.ok(await previewInk(page) > regularInk * 1.05, "general-family synthesis visibly thickens the same fixture outlines");
+
+        await page.getByLabel("Select font files", { exact: true }).setInputFiles(fontFile("other-italic.ttf", "Other Family", 400, { italic: true }));
+        await ready(page);
+        const boldItalic = bold.replace("Cambria Math", "Other Family").replace('font-weight="700"', 'font-weight="700" font-style="italic"');
+        await paste(page, boldItalic);
+        await ready(page);
+        await toolbar.getByText("Fonts ready · synthesized bold", { exact: true }).waitFor();
+        await checkSource(page, boldItalic);
+        const boldItalicBytes = await save(page, "synthetic-bold-italic.pdf");
+        const boldItalicPdf = await inspectPdf(boldItalicBytes);
+        assert.equal(boldItalicPdf.text, "P₀/H₀₁₃");
+        assert.match(boldItalicBytes.toString("latin1"), /Fixture-OtherFamily-Italic/);
+        assert.ok(boldItalicPdf.painted.some(item => (item.mode & 3) === 2), "bold italic uses the same family's italic face");
+        await page.getByLabel("Select font files", { exact: true }).setInputFiles(fontFile("other-bold-italic.ttf", "Other Family", 700, { italic: true }));
+        await ready(page);
+        await toolbar.getByText("Fonts ready", { exact: true }).waitFor();
+        const exactItalicBytes = await save(page, "synthetic-bold-exact-italic.pdf");
+        const exactItalicPdf = await inspectPdf(exactItalicBytes);
+        assert.equal(exactItalicPdf.text, "P₀/H₀₁₃");
+        assert.match(exactItalicBytes.toString("latin1"), /Fixture-OtherFamily-BoldItalic/);
+        assert.ok(exactItalicPdf.painted.every(item => (item.mode & 3) === 0), "adding a real bold italic face removes synthesis");
 
         // This metadata-only bold fixture intentionally retains regular outlines:
         // it isolates exact-face preference from any change in the test glyphs.
@@ -184,8 +231,23 @@ const fontFile = (name, family, weight = 400) => ({ name, mimeType: "font/ttf", 
         const exactPdf = await inspectPdf(await save(page, "synthetic-bold-exact.pdf"));
         assert.equal(exactPdf.text, "P₀/H₀₁₃");
         assert.ok(exactPdf.painted.every(item => (item.mode & 3) === 0), "an exact bold face removes synthetic strokes");
+
+        const folderPage = await context.newPage();
+        folderPage.on("pageerror", error => errors.push(error.message));
+        await folderPage.goto(pathToFileURL(path.join(root, "dist-web/index.html")).href);
+        await paste(folderPage, bold.replace("Cambria Math", "Folder Family"));
+        await folderPage.waitForFunction(() => document.querySelector("main")?.getAttribute("aria-busy") === "false");
+        await folderPage.getByLabel("Select font folder", { exact: true }).setInputFiles(fontFolder);
+        await ready(folderPage);
+        await folderPage.getByRole("navigation", { name: "Main toolbar", exact: true }).getByText("Fonts ready", { exact: true }).waitFor();
+        const folderBytes = await save(folderPage, "synthetic-bold-folder-exact.pdf");
+        const folderPdf = await inspectPdf(folderBytes);
+        assert.equal(folderPdf.text, "P₀/H₀₁₃");
+        assert.match(folderBytes.toString("latin1"), /Fixture-FolderFamily-Bold/);
+        assert.ok(folderPdf.painted.every(item => (item.mode & 3) === 0), "folder scanning continues past the regular face to find real bold");
+        await folderPage.close();
         assert.deepEqual(external, [], "font synthesis requires no external resources");
         assert.deepEqual(errors, [], "no uncaught browser errors");
-        console.log("Synthetic bold smoke passed: regular-face fallback, UI, original source, selectable vector text, visible bold, mixed-span inheritance, existing-outline rejection, visible missing-font substitutions and exact-face preference.");
-    } finally { await browser.close(); }
+        console.log("Synthetic bold smoke passed: Cambria and general-family synthesis, Segoe UI Symbol mixed weights, matching italic styles, UI, original source, selectable vector text, visible bold, existing-outline rejection, missing-style substitution and exact-face preference for imported files/folders.");
+    } finally { await browser.close(); fs.rmSync(fontFolder, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

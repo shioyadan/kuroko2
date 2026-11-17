@@ -33,7 +33,7 @@ export function FontSetup({ state, onAllow, onChooseFolder, onChooseFiles }: Pro
                     <span>{fontLabel(font)}</span>
                     <span className={missing.has(fontKey(font)) ? "font-missing" : "font-ready"}>{state.busy ? "Checking…" : missing.has(fontKey(font)) ? "Missing" : synthesized.has(fontKey(font)) ? "Synthesized bold" : "Ready"}</span>
                 </li>)}</ul>
-                {synthesized.size > 0 && <p className="help-text">Cambria Math has no separate bold face. Its regular face is thickened to approximate Windows bold rendering.</p>}
+                {synthesized.size > 0 && <p className="help-text">When a bold face is unavailable, the same font's regular-weight face is thickened to approximate bold rendering. Available bold faces take priority.</p>}
                 {state.busy ? <p role="status">{state.status}</p> : missing.size > 0 ? <div className="font-setup-step">
                     <p className="font-missing">{state.pdf
                         ? "The PDF uses substitute fonts and may look different. Adding the missing fonts regenerates it with the original fonts."

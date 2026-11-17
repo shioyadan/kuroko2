@@ -107,18 +107,21 @@ async function checkSource(page, expected) {
         await notice.waitFor();
         await page.screenshot({ path: path.join(work, "fallback-fonts-notice.png") });
 
-        // A partial import must keep the guide open and preserve the remaining
-        // warning even though a usable PDF is generated after every import.
+        // A regular face also resolves the same family's missing bold through
+        // synthesis. A later exact bold import replaces that synthesized result.
         await notice.getByRole("button", { name: "Add fonts…", exact: true }).click();
         const setup = page.getByRole("dialog", { name: "Fonts", exact: true });
         await input.setInputFiles(fontFile("Aptos"));
         await ready(page);
-        await setup.waitFor();
-        assert.match(await notice.innerText(), /Aptos 700/);
-        assert.doesNotMatch(await notice.innerText(), /Aptos 400/);
+        await setup.waitFor({ state: "detached" });
+        assert.equal(await notice.count(), 0, "an original regular face clears the regular and synthetic-bold requirements");
+        await toolbar.getByText("Fonts ready · synthesized bold", { exact: true }).waitFor();
+        const synthesized = await save(page, "fallback-fonts-synthesized.pdf");
+        assert.equal(await inspectPdf(synthesized), "RegularΩKnownBold₀");
+        assert.match(synthesized.toString("latin1"), /Fixture-Aptos-Regular/);
+        assert.doesNotMatch(synthesized.toString("latin1"), /Fixture-Arial/, "synthesized Aptos replaces the substitute family");
         await input.setInputFiles(fontFile("Aptos", 700));
         await ready(page);
-        await setup.waitFor({ state: "detached" });
         assert.equal(await notice.count(), 0, "adding every original face clears the warning");
         await toolbar.getByText("Fonts ready", { exact: true }).waitFor();
         const exact = await save(page, "fallback-fonts-restored.pdf");
@@ -128,6 +131,20 @@ async function checkSource(page, expected) {
         assert.match(exact.toString("latin1"), /Fixture-KnownFont-Regular/);
         assert.doesNotMatch(exact.toString("latin1"), /Fixture-Arial/, "original fonts replace the substitutes on reconversion");
         await checkSource(page, source);
+
+        // Importing just one of two missing families still leaves the guide open.
+        await paste(page, svg('<text x="16" y="44" font-family="Partial One" font-size="28">One<tspan font-family="Partial Two"> Two</tspan></text>'));
+        await ready(page);
+        await notice.getByRole("button", { name: "Add fonts…", exact: true }).click();
+        await input.setInputFiles(fontFile("Partial One"));
+        await ready(page);
+        await setup.waitFor();
+        assert.match(await notice.innerText(), /Partial Two 400/);
+        assert.doesNotMatch(await notice.innerText(), /Partial One/);
+        await input.setInputFiles(fontFile("Partial Two"));
+        await ready(page);
+        await setup.waitFor({ state: "detached" });
+        assert.equal(await notice.count(), 0);
 
         // Local fallback selection supports Japanese, Latin, Greek, subscripts
         // and available styles without downloading or bundling any font files.
@@ -193,6 +210,6 @@ async function checkSource(page, expected) {
         await folderPage.close();
         assert.deepEqual(errors, []);
         assert.deepEqual(external, [], "font substitutes are obtained locally without remote font requests");
-        console.log("Fallback fonts smoke passed: red notice, vector and selectable embedded text, local Arial/Times/Yu Gothic selection, save with warning, exact child fonts, partial/full font imports, nested-folder substitutes, reconversion, source preservation, styled and Japanese substitutes, mobile layout and unsupported-glyph errors.");
+        console.log("Fallback fonts smoke passed: red notice, vector and selectable embedded text, local Arial/Times/Yu Gothic selection, save with warning, exact child fonts, synthesis after importing a regular original, exact-bold replacement, partial/full font imports, nested-folder substitutes, reconversion, source preservation, styled and Japanese substitutes, mobile layout and unsupported-glyph errors.");
     } finally { await browser.close(); fs.rmSync(fontFolder, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

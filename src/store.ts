@@ -269,7 +269,7 @@ export class Store {
         const required = this.state.document?.fonts ?? [];
         for (const file of this.fontFolderFiles) {
             if (id !== this.requestId) return;
-            if (!this.fonts.missing(required).length) break;
+            if (!this.fonts.missingExact(required).length) break;
             if (!/\.(ttf|otf|ttc|otc)$/i.test(file.name) || file.size > MAX_FONT_BYTES) continue;
             try {
                 const parsed = parseFont(new Uint8Array(await file.arrayBuffer()), file.name);
@@ -283,8 +283,9 @@ export class Store {
     }
     private async addFontFiles(files: readonly File[], directory: boolean, id: number): Promise<void> {
         try {
-            if (directory) await this.scanFontFolder(id);
-            else for (const file of files) {
+            // Folder files are scanned by resolveAndConvert, including a search
+            // for exact bold faces before accepting a synthetic one.
+            if (!directory) for (const file of files) {
                 if (id !== this.requestId) return;
                 try { await this.fonts.add(file); console.info(`Loaded font: ${file.name}`); }
                 catch (error) { console.warn(message(error)); }
@@ -296,9 +297,12 @@ export class Store {
         const document = this.state.document;
         try {
             if (!document) { this.publish({ busy: false, fontLoading: false, status: "Fonts loaded. Paste a figure to continue." }); return; }
-            if (this.fonts.missing(document.fonts).length) {
+            if (this.fonts.missingExact(document.fonts).length) {
                 this.publish({ fontLoading: true, status: "Loading fonts…" });
-                const fontAccess = await this.fonts.ensureLocal(promptMode, () => id === this.requestId);
+                // Look for a real bold face when access is already granted, but
+                // do not prompt just to replace an available synthetic face.
+                const mode = promptMode === "automatic" && !this.fonts.missing(document.fonts).length ? "never" : promptMode;
+                const fontAccess = await this.fonts.ensureLocal(mode, () => id === this.requestId);
                 if (id !== this.requestId) return;
                 this.publish({ fontAccess });
             }
