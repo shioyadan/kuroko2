@@ -36,7 +36,7 @@ SVG ファイルを直接開くことや、ウィンドウへドラッグ＆ド�
 元のフォントが不足している場合は、PC 内の Arial や Times New Roman などから代替フォントを探し、PDF を作成します。ツールバーの下に、足りないフォントを赤いメッセージで表示します。そのまま保存できますが、元の図とは文字の形・幅・配置が変わる場合があります。元のフォントを読み込むには、メッセージ内の Add fonts… をクリックしてください。メニュー → Fonts からも同じ案内を開けます。
 
 - 許可が必要な場合は Allow font access をクリックします。アクセスがブロックされている場合や自動取得に対応していない場合は、フォルダー選択へ案内します。
-- Choose font folder… でフォルダーを選ぶと、その中とサブフォルダーから不足フォントを探します。Aptos などの Office フォントは `%LOCALAPPDATA%\Microsoft\FontCache` 内の `CloudFonts` フォルダーを選択してください。通常のフォントは `C:\Windows\Fonts` にあります。
+- Choose font folder… でフォルダーを選ぶと、その中とサブフォルダーから不足フォントを探します。Aptos などの Office フォントは `C:\Users\<ユーザー名>\AppData\Local\Microsoft\FontCache` 内の `CloudFonts` フォルダーを選択してください。`<ユーザー名>` は、Windows のユーザーフォルダー名に置き換えてください。通常のフォントは `C:\Windows\Fonts` にあります。
 - TTF・OTF・TTC・OTC ファイルを直接選ぶ場合は、Choose individual font files instead を開いてください。許可の案内が表示されている場合は、先に Add fonts from a folder or files instead を開きます。
 
 使用できる代替フォントも読み込めない場合は、同じ案内画面からローカルフォントへのアクセスを許可するか、フォントファイルを選択してください。kuroko 2 にフォントは同梱していません。

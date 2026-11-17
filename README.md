@@ -44,7 +44,7 @@ letter shapes, spacing and layout may differ from the original. Click
 Add fonts… in the message to load the originals. Menu → Fonts opens the same guide.
 
 - If permission is needed, click Allow font access. If access is blocked or unavailable, the guide offers folder selection.
-- Click Choose font folder… to find the missing fonts in that folder and its subfolders. For Office fonts such as Aptos, select the `CloudFonts` folder under `%LOCALAPPDATA%\Microsoft\FontCache`. Other installed fonts are usually in `C:\Windows\Fonts`.
+- Click Choose font folder… to find the missing fonts in that folder and its subfolders. For Office fonts such as Aptos, select the `CloudFonts` folder under `C:\Users\<username>\AppData\Local\Microsoft\FontCache`. Replace `<username>` with your Windows user folder name. Other installed fonts are usually in `C:\Windows\Fonts`.
 - To select TTF, OTF, TTC or OTC files directly, expand Choose individual font files instead. If the guide is asking for permission, expand Add fonts from a folder or files instead first.
 
 If no usable substitute can be loaded, allow local font access or select font

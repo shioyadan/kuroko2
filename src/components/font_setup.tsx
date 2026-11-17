@@ -15,7 +15,7 @@ export function FontSetup({ state, onAllow, onChooseFolder, onChooseFiles }: Pro
     const needsPermission = state.fontAccess === "permission" || state.fontAccess === "unknown";
     const folderChoice = <>
         <p>Choose a folder containing the missing fonts. Matching files in its subfolders are loaded automatically.</p>
-        <p className="help-text">For Office fonts such as Aptos, select the <code>CloudFonts</code> folder under <code>%LOCALAPPDATA%\Microsoft\FontCache</code>. Other installed fonts are usually in <code>C:\Windows\Fonts</code>.</p>
+        <p className="help-text">For Office fonts such as Aptos, select the <code>CloudFonts</code> folder under <code>C:\Users\&lt;username&gt;\AppData\Local\Microsoft\FontCache</code>. Replace <code>&lt;username&gt;</code> with your Windows user folder name. Other installed fonts are usually in <code>C:\Windows\Fonts</code>.</p>
         <button className="primary-button" disabled={state.busy || state.saving} onClick={onChooseFolder}>Choose font folder…</button>
         <details className="font-file-option">
             <summary>Choose individual font files instead</summary>
