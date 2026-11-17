@@ -65,6 +65,25 @@ separate server file is needed. Both archives also include the English and
 Japanese guides and license notices. The source tree keeps the Python server
 separate for maintenance and tests.
 
+To update an extracted distribution, stop its launcher and run
+`./kuroko2.sh --update`. It downloads the checked `kuroko-latest.zip` from Pages,
+shows the installed and available commit hashes and dates, and asks before
+replacing files. Answer `y` to install, then restart the launcher and reload the
+browser. Identical files need no confirmation; older or differing builds are
+identified before the prompt. Source checkouts must be updated and rebuilt using
+Git instead. Symlinked launch commands update the actual distribution directory.
+
+The bundler stamps the launcher with the Git commit timestamp, hash and date.
+The updater uses Python's standard library and is included in `kuroko2.sh`.
+It stages and validates the archive, build marker, shell syntax and HTML before
+installation, and restores replaced files if installation fails. It updates
+`kuroko2.sh`, `index.html`, and any packaged README/license files and development
+guide; unrelated files and Overleaf caches are retained. Downloads are capped at
+128 MiB, as are the selected files after unpacking. `KUROKO_UPDATE_URL` overrides
+the download URL for fixture tests or a trusted mirror.
+`test/updater_test.py` exercises updates using local archives, including decline,
+invalid downloads, symlinks and rollback, without contacting the published app.
+
 ## GitHub Pages
 
 [`.github/workflows/pages.yml`](https://github.com/shioyadan/kuroko2/blob/master/.github/workflows/pages.yml) runs on pushes to
