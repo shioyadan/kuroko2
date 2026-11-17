@@ -67,7 +67,7 @@ Chrome・Edge の保存ダイアログは、直近に保存が成功した PDF �
 ローカル起動では、生成した PDF を Overleaf のプロジェクトにアップロードしたり、プロジェクト内の PDF を取得してプレビュー・ダウンロードしたりできます。Python 3 と Git が必要です。Windows では WSL から起動してください。この機能は起動スクリプトが表示する URL で使えます。Web 版や、HTML を直接開いた場合は利用できません。
 
 1. Overleaf のプロジェクトで Git 接続を利用できることを確認し、起動元で使う Git の認証を設定します。Overleaf は HTTPS 接続で、ユーザー名 `git` と Git 認証トークンを使います。SSH 鍵や `ssh-add` は使いません。[Overleaf の認証ガイド](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens)に従って Git の credential helper を設定し、`git ls-remote <Git URL>` が入力を求めずに成功する状態にしてください。Git 接続には[対応する Overleaf のプラン](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration)が必要です。
-2. オフライン版の ZIP を展開し、そのフォルダーで `./kuroko2.sh` を実行します。表示された URL（通常は `http://127.0.0.1:30080/`）を開きます。
+2. オフライン版の ZIP を展開し、そのフォルダーで `./kuroko2.sh` を実行します。`kuroko2.sh` と `index.html` は同じフォルダーに置いてください。サーバー部分はスクリプトに含まれています。表示された URL（通常は `http://127.0.0.1:30080/`）を開きます。
 3. メニュー → Overleaf でプロジェクトの Git URL を入力し、Connect をクリックします。`https://git.overleaf.com/<project-id>` のような URL だけを入力し、トークンは含めないでください。
 4. 一覧で PDF を選ぶと、最初のページをプレビューできます。Download PDF でダウンロードできます。生成した図をアップロードする場合は `figures/figure.pdf` のようなプロジェクト内の相対パスを入力し、Upload PDF をクリックします。一覧で既存の PDF を選ぶと、そのパスを再利用できます。上書きする場合は Replace PDF で確認します。
 

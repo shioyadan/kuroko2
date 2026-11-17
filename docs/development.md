@@ -57,8 +57,11 @@ HTTP origins where `crypto.randomUUID()` is unavailable.
 `make release-archive` runs checks and packages the app as
 `dist-release/kuroko-v<version>.zip`. `make archive ARCHIVE_NAME=kuroko-latest`
 packages the already-built app under the stable download filename used on Pages.
-Both archives include the Python launcher server, the English and Japanese guides
-and license notices.
+`tools/bundle_launcher.py` embeds the Python server in the distributed
+`kuroko2.sh`. The launcher and `index.html` are sufficient to run the app; no
+separate server file is needed. Both archives also include the English and
+Japanese guides and license notices. The source tree keeps the Python server
+separate for maintenance and tests.
 
 ## GitHub Pages
 
@@ -226,6 +229,8 @@ the browser download mechanism. Overleaf uploads do not add local-save history.
 HTTP requests to check uploads, conflicts, path checks and server boundaries.
 `test/overleaf_smoke.cjs` checks the browser flow with a local API fixture. Neither
 test contacts a real Overleaf project or needs credentials.
+`test/launcher_test.py` starts the bundled launcher with only an HTML file beside
+it and checks HTTP serving and clean shutdown.
 
 ## Notices and local files
 

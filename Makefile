@@ -36,7 +36,9 @@ ARCHIVE_NAME := kuroko-v$(VERSION)
 archive:
 	rm -rf dist-release/$(ARCHIVE_NAME) dist-release/$(ARCHIVE_NAME).zip
 	mkdir -p dist-release/$(ARCHIVE_NAME)/docs
-	cp dist-web/index.html kuroko2.sh kuroko2_server.py README.md README.ja.md LICENSE.md THIRD_PARTY_LICENSES.md dist-release/$(ARCHIVE_NAME)/
+	cp dist-web/index.html README.md README.ja.md LICENSE.md THIRD_PARTY_LICENSES.md dist-release/$(ARCHIVE_NAME)/
+	python3 tools/bundle_launcher.py kuroko2.sh kuroko2_server.py dist-release/$(ARCHIVE_NAME)/kuroko2.sh
+	bash -n dist-release/$(ARCHIVE_NAME)/kuroko2.sh
 	cp docs/development.md dist-release/$(ARCHIVE_NAME)/docs/
 	cd dist-release && zip -q -r $(ARCHIVE_NAME).zip $(ARCHIVE_NAME)
 	zip -T dist-release/$(ARCHIVE_NAME).zip

@@ -101,8 +101,9 @@ not from the hosted web app or an HTML file opened directly.
    to set up a Git credential helper. Confirm that `git ls-remote <Git URL>` works
    without prompting before connecting from kuroko 2. Git access requires an
    [eligible Overleaf plan](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration).
-2. Extract the offline ZIP and run `./kuroko2.sh` from its folder. Open the printed
-   URL, normally `http://127.0.0.1:30080/`.
+2. Extract the offline ZIP and run `./kuroko2.sh` from its folder. Keep
+   `kuroko2.sh` and `index.html` together; the server is included in the script.
+   Open the printed URL, normally `http://127.0.0.1:30080/`.
 3. Open Menu → Overleaf, enter the project's Git URL, and click Connect. Enter
    only the URL, such as `https://git.overleaf.com/<project-id>`, without a token.
 4. Select a project PDF to preview its first page or Download PDF. To upload your
