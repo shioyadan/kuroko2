@@ -7,6 +7,7 @@ import { SaveSuggestion } from "./components/save_suggestion";
 import { FontSetup } from "./components/font_setup";
 import { ApplicationMenu } from "./components/application_menu";
 import { OverleafPanel } from "./components/overleaf_panel";
+import { canonicalProjectUrl } from "./overleaf_history";
 
 function editable(target: EventTarget | null): boolean {
     return target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input,textarea,select"));
@@ -101,6 +102,9 @@ export function App({ store }: { store: Store }) {
     };
     const openOverleaf = () => { setDialog("overleaf"); store.overleaf.dispatch({ type: "INIT" }); };
     const closeOverleaf = () => { store.overleaf.dispatch({ type: "DISMISS_CONFIRM" }); setDialog(null); };
+    const overleafUrl = canonicalProjectUrl(overleaf.url);
+    const overleafProject = overleaf.recentProjects.find(project => project.url === overleafUrl)?.name
+        || (overleafUrl ? `${overleafUrl.split("/").pop()!.slice(0, 8)}…` : "");
 
     return <div className="kuroko-app" onDragStartCapture={event => {
         // Image drags and selection drags from previews must never become new input.
@@ -123,7 +127,13 @@ export function App({ store }: { store: Store }) {
             <div className="toolbar-actions">
                 <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
                 <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
-                {overleaf.available && <button className="overleaf-upload-button" onClick={openOverleaf} disabled={!state.pdf || state.busy || state.saving || overleaf.busy} title="Upload to Overleaf" aria-label="Upload to Overleaf"><BsCloudArrowUp /> <span>Upload to Overleaf</span></button>}
+                {overleaf.available && <div className="toolbar-overleaf">
+                    <button className="overleaf-upload-button" onClick={openOverleaf} disabled={!state.pdf || state.busy || state.saving || overleaf.busy} title="Upload to Overleaf" aria-label="Upload to Overleaf"><BsCloudArrowUp /> <span>Upload to Overleaf</span></button>
+                    {overleafUrl && <span className="overleaf-connection-indicator" role="status" aria-label="Overleaf connection" title={overleafUrl}>
+                        <span className="connection-dot" aria-hidden="true" />
+                        <span className="connection-text">Connected: {overleafProject}</span>
+                    </span>}
+                </div>}
             </div>
             <div className="toolbar-document">
                 <div className="zoom-controls">

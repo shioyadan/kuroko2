@@ -22,6 +22,14 @@ const editedSvg = shape('<circle cx="97" cy="48" r="38" fill="#c0473e"/>');
 const oid = bytes => createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
 const toolbar = page => page.getByRole("navigation", { name: "Main toolbar", exact: true });
 const uploadButton = page => toolbar(page).getByRole("button", { name: "Upload to Overleaf", exact: true });
+const connectionIndicator = page => toolbar(page).getByRole("status", { name: "Overleaf connection", exact: true, includeHidden: true });
+
+async function connected(page, label, url = projectUrl) {
+    const indicator = connectionIndicator(page);
+    await indicator.waitFor();
+    assert.equal((await indicator.innerText()).trim(), `Connected: ${label}`);
+    assert.equal(await indicator.getAttribute("title"), url, "the full project URL is available on hover");
+}
 
 async function paste(page, svg) {
     await page.evaluate(text => {
@@ -219,6 +227,7 @@ async function fixture(context) {
         await page.goto(origin + "/");
         await uploadButton(page).waitFor();
         assert.equal(await uploadButton(page).isDisabled(), true, "upload requires a generated PDF");
+        assert.equal(await connectionIndicator(page).count(), 0, "bridge availability alone is not a project connection");
         assert.ok(api.requests.length > 0 && api.requests.every(request => request.action === ""), "startup only checks the local bridge and never connects to Overleaf");
 
         await paste(page, oldSvg);
@@ -237,8 +246,10 @@ async function fixture(context) {
         assert.equal(api.requests.filter(request => request.action === "/connect").length, 0);
         assert.ok(!(await page.evaluate(() => localStorage.getItem("kuroko.overleafProjects") || "")).includes("secret"));
         await connect(panel);
+        await connected(page, "01234567…");
         assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("kuroko.overleafProjects"))), [{ url: projectUrl, name: "" }]);
         await panel.getByRole("button", { name: "Change project", exact: true }).click();
+        await connectionIndicator(page).waitFor({ state: "detached" });
         const beforeName = api.requests.length;
         await panel.getByRole("button", { name: `Name project ${projectUrl}`, exact: true }).click();
         const projectNameField = panel.getByLabel(`Project name for ${projectUrl}`, { exact: true });
@@ -253,6 +264,7 @@ async function fixture(context) {
         await panel.getByRole("button", { name: `Use project ${projectName}`, exact: true }).waitFor();
         await page.screenshot({ path: path.join(work, "overleaf-recent-projects.png") });
         await connect(panel);
+        await connected(page, projectName);
         await panel.locator(".overleaf-connection").getByText(projectName, { exact: false }).waitFor();
         assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("kuroko.overleafProjects"))), [{ url: projectUrl, name: projectName }]);
         const sourcePreview = panel.getByRole("region", { name: "Figure to upload", exact: true });
@@ -308,6 +320,26 @@ async function fixture(context) {
         await page.screenshot({ path: path.join(work, "overleaf-save-picker.png") });
         await panel.getByRole("button", { name: "Upload PDF", exact: true }).click();
         await saved(page, panel, newPath);
+        await connected(page, projectName);
+        await page.screenshot({ path: path.join(work, "overleaf-connected-toolbar.png") });
+        for (const width of [1400, 1201, 1001, 1000, 760, 551, 390, 320]) {
+            await page.setViewportSize({ width, height: 950 });
+            assert.equal(await toolbar(page).evaluate(element => element.scrollWidth <= element.clientWidth + 1), true, `toolbar fits at ${width}px`);
+            for (const control of [uploadButton(page), connectionIndicator(page), page.getByLabel("PDF file name", { exact: true }), page.getByLabel("Application menu", { exact: true })]) {
+                const box = await control.boundingBox();
+                assert.ok(box && box.width >= 30 && box.x >= 0 && box.x + box.width <= width + 1, `toolbar control stays visible at ${width}px`);
+            }
+        }
+        await page.screenshot({ path: path.join(work, "overleaf-connected-toolbar-mobile.png") });
+        await page.setViewportSize({ width: 1200, height: 950 });
+        const beforeReload = api.requests.filter(request => request.action === "/connect").length;
+        const reloadedPage = await context.newPage();
+        await reloadedPage.goto(origin + "/");
+        await connected(reloadedPage, projectName);
+        await reloadedPage.reload();
+        await connected(reloadedPage, projectName);
+        assert.equal(api.requests.filter(request => request.action === "/connect").length, beforeReload, "reload restores the server connection indicator without reconnecting");
+        await reloadedPage.close();
         assert.deepEqual(api.uploads[0].bytes, current);
         assert.equal(api.uploads[0].expected, "");
         const firstHistory = await history(page);
@@ -383,6 +415,7 @@ async function fixture(context) {
         assert.equal(await panel.getByRole("region", { name: "Suggested destinations", exact: true }).count(), 0, "same paths and bytes in another project do not inherit suggestions");
         await panel.getByRole("button", { name: "Change project", exact: true }).click();
         await connect(panel, otherProjectUrl);
+        await connected(page, "abcdef01…", otherProjectUrl);
         assert.equal(await panel.getByRole("region", { name: "Suggested destinations", exact: true }).count(), 0);
         await closePanel(panel);
 
@@ -391,6 +424,7 @@ async function fixture(context) {
         const connectCount = api.requests.filter(request => request.action === "/connect").length;
         await page.reload();
         await uploadButton(page).waitFor();
+        assert.equal(await connectionIndicator(page).count(), 0, "a stopped server session is not shown as connected");
         await paste(page, editedSvg);
         panel = await openPanel(page);
         assert.equal(await panel.getByLabel("Overleaf Git URL", { exact: true }).inputValue(), otherProjectUrl);
@@ -399,6 +433,7 @@ async function fixture(context) {
         assert.equal(api.requests.filter(request => request.action === "/connect").length, connectCount, "remembering a URL never initiates a connection");
         await panel.getByRole("button", { name: "Connect", exact: true }).click();
         await settle(panel);
+        await connected(page, projectName);
         await panel.getByRole("button", { name: `Use suggested destination ${newPath}`, exact: true }).waitFor();
         assert.equal((await panel.getByLabel("Destination path", { exact: true }).innerText()).trim(), newPath, "saved destinations survive reload and reconnect");
         await page.setViewportSize({ width: 390, height: 844 });
@@ -445,6 +480,7 @@ async function fixture(context) {
         offlinePage.on("pageerror", error => errors.push(error.message));
         await offlinePage.goto(pathToFileURL(index).href);
         assert.equal(await uploadButton(offlinePage).count(), 0);
+        assert.equal(await connectionIndicator(offlinePage).count(), 0);
         const offlinePanel = await openPanel(offlinePage, true);
         await offlinePanel.getByText("Overleaf is available when kuroko 2 is opened with its local launcher.", { exact: true }).waitFor();
         assert.deepEqual(offlineRequests, []);
@@ -457,6 +493,7 @@ async function fixture(context) {
         const unavailablePanel = await openPanel(unavailablePage, true);
         await unavailablePanel.getByText("Overleaf is available when kuroko 2 is opened with its local launcher.", { exact: true }).waitFor();
         assert.equal(await uploadButton(unavailablePage).count(), 0, "a plain localhost server does not expose the upload button");
+        assert.equal(await connectionIndicator(unavailablePage).count(), 0);
         assert.deepEqual(api.unexpected, []);
         assert.deepEqual(api.failures, []);
         assert.deepEqual(errors, []);
