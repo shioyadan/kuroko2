@@ -18,10 +18,10 @@ server-side conversion is required.
 
 ```sh
 make serve     # Development server: http://127.0.0.1:8080
-./kuroko.sh    # Serve the built HTML only: http://127.0.0.1:30080
+./kuroko2.sh   # Serve the built HTML only: http://127.0.0.1:30080
 ```
 
-`kuroko.sh` requires Python 3; `KUROKO_PORT` overrides its port. On Windows,
+`kuroko2.sh` requires Python 3; `KUROKO_PORT` overrides its port. On Windows,
 `py -m http.server 30080 --bind 127.0.0.1 --directory dist-web` is another option.
 
 ## Checks and packaging

@@ -15,7 +15,7 @@ typecheck:
 test:
 	npm test
 check:
-	bash -n kuroko.sh
+	bash -n kuroko2.sh
 	$(MAKE) typecheck
 	$(MAKE) test
 	$(MAKE) production-smoke
@@ -34,7 +34,7 @@ ARCHIVE_NAME := kuroko-v$(VERSION)
 archive:
 	rm -rf dist-release/$(ARCHIVE_NAME) dist-release/$(ARCHIVE_NAME).zip
 	mkdir -p dist-release/$(ARCHIVE_NAME)/docs
-	cp dist-web/index.html kuroko.sh README.md README.ja.md LICENSE.md THIRD_PARTY_LICENSES.md dist-release/$(ARCHIVE_NAME)/
+	cp dist-web/index.html kuroko2.sh README.md README.ja.md LICENSE.md THIRD_PARTY_LICENSES.md dist-release/$(ARCHIVE_NAME)/
 	cp docs/development.md dist-release/$(ARCHIVE_NAME)/docs/
 	cd dist-release && zip -q -r $(ARCHIVE_NAME).zip $(ARCHIVE_NAME)
 	zip -T dist-release/$(ARCHIVE_NAME).zip
