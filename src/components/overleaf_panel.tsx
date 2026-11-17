@@ -164,13 +164,13 @@ export function OverleafPanel({ store, pdf, preview, fileName, conversionBusy, o
             {state.busy && <button aria-label="Cancel Overleaf operation" onClick={() => store.dispatch({ type: "CANCEL" })}>Cancel</button>}
         </div>}
         {!state.historyPersistent && <p className="help-text" role="status">Recent projects and destinations are available for this session only.</p>}
-        {state.available === false ? <div className="overleaf-launcher-help">
+        {state.available === false ? <div>
             <p>Overleaf is available when kuroko 2 is opened with its local launcher.</p>
             <p>Run <code>./kuroko2.sh</code> in your terminal, then open the URL it prints. On Windows, run the launcher in WSL.</p>
             <p className="help-text">The launcher uses Python 3 and Git. Configure Overleaf authentication in that Git installation before connecting.</p>
             <button disabled={state.busy} onClick={() => store.dispatch({ type: "INIT" })}>Check connection</button>
         </div> : state.available === null ? <p className="help-text">Checking the local launcher…</p> : !state.url ? <>
-            <form className="overleaf-connect" onSubmit={event => {
+            <form onSubmit={event => {
                 event.preventDefault();
                 if (!state.busy && url.trim()) store.dispatch({ type: "CONNECT", url: url.trim() });
             }}>

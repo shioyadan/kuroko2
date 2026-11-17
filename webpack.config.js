@@ -20,14 +20,13 @@ module.exports = (_env, argv) => {
         optimization: { minimizer: [new TerserPlugin({ extractComments: false })] },
         performance: { hints: false },
         module: { rules: [
-            { resourceQuery: /source/, type: "asset/source" },
             { test: /\.tsx?$/, exclude: [/node_modules/, /(?:conversion|pdf_preview)_worker\.ts$/], use: "ts-loader" },
             { test: /(?:conversion|pdf_preview)_worker\.ts$/, use: [
                 { loader: "worker-loader", options: { inline: "no-fallback", filename: "[name].js" } },
                 "ts-loader"
             ] },
             { test: /\.css$/, use: ["style-loader", "css-loader"] },
-            { test: /\.(wasm|svg|png|woff2?)$/, type: "asset/inline" }
+            { test: /\.wasm$/, type: "asset/inline" }
         ] },
         plugins: [
             new webpack.DefinePlugin({

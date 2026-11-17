@@ -234,11 +234,8 @@ class OverleafBridge:
         if process is None:
             return
         try:
-            if os.name == "posix":
-                # A helper can keep pipes open after Git itself exits.
-                os.killpg(process.pid, signal.SIGKILL)
-            elif process.poll() is None:
-                process.kill()
+            # A helper can keep pipes open after Git itself exits.
+            os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
 
@@ -288,7 +285,7 @@ class OverleafBridge:
                 process = subprocess.Popen(
                     command, stdin=subprocess.PIPE if data is not None else subprocess.DEVNULL,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
-                    start_new_session=os.name == "posix",
+                    start_new_session=True,
                 )
                 self._process = process
             try:
@@ -323,9 +320,9 @@ class OverleafBridge:
             if not record:
                 continue
             metadata, raw_path = record.split(b"\t", 1)
-            mode, kind, oid, size = metadata.decode("ascii").split()
+            mode, _, oid, size = metadata.decode("ascii").split()
             path = raw_path.decode("utf-8", "surrogateescape")
-            entries[path] = {"mode": mode, "kind": kind, "oid": oid}
+            entries[path] = {"mode": mode, "oid": oid}
             if mode not in ("100644", "100755") or not path.lower().endswith(".pdf"):
                 continue
             try:
@@ -594,7 +591,7 @@ def make_server(index_file, port=0, bridge=None):
         def _json_body(self):
             try:
                 data = json.loads(self._body("application/json", MAX_JSON_BYTES))
-            except (ValueError, UnicodeDecodeError):
+            except ValueError:
                 raise BridgeError("Invalid JSON request.") from None
             if not isinstance(data, dict):
                 raise BridgeError("Expected a JSON object.")
@@ -670,9 +667,7 @@ def make_server(index_file, port=0, bridge=None):
             super().server_close()
             bridge.close()
 
-    server = Server(("127.0.0.1", port), Handler)
-    server.bridge = bridge
-    return server
+    return Server(("127.0.0.1", port), Handler)
 
 
 def make_available_server(index_file, port):

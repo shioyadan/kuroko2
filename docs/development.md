@@ -36,7 +36,7 @@ make check
 make archive
 ```
 
-`make check` runs launcher syntax validation, TypeScript checks, core and local Git tests, license
+`make check` runs launcher syntax validation, TypeScript checks (including unused locals and parameters), core and local Git tests, license
 checks, the production build, the single-HTML check and browser smoke tests.
 Linux tests also require DejaVu Sans (`fonts-dejavu-core` on Ubuntu).
 Set `CHROMIUM_PATH` to use an existing Chromium executable, or `TEST_FONT_PATH`
@@ -120,9 +120,11 @@ toolbar and paste/save flow follow the original Kuroko.
 | `src/core/effects.ts` | Rasterize Office shadows at 150 dpi while preserving z-order |
 | `src/core/conversion_worker.ts` | krilla-svg WASM conversion |
 | `src/core/pdf_preview_worker.ts` | Render the generated PDF with PDFium |
+| `src/core/worker_request.ts` | Shared worker completion, cancellation, timeout and cleanup |
 | `src/file_access.ts` | Save picker and download fallback |
 | `src/core/figure_match.ts` | A small ink-layout descriptor and shape histogram for similar-figure suggestions |
 | `src/save_history.ts` | Bounded IndexedDB history, thumbnails and reusable save handles |
+| `src/history_database.ts` | Shared history database connections and transaction lifecycle |
 | `vendor/krilla-wasm/` | Validated WASM binary, Rust source and Cargo.lock from the SVG experiment |
 
 Conversion and preview workers are terminated on completion, cancellation or

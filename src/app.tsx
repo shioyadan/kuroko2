@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BsClipboard, BsFileEarmarkArrowDown, BsFolder2Open, BsFonts, BsInfoCircle, BsJournalText, BsCodeSlash, BsX, BsArrowsFullscreen, BsClockHistory, BsCloudArrowUp } from "react-icons/bs";
 import { Store } from "./store";
-import { fontKey, fontLabel } from "./core/svg";
+import { fontLabel } from "./core/svg";
 import { LogPane, type LogEntry, type LogLevel } from "./components/log_pane";
 import { SaveSuggestion } from "./components/save_suggestion";
 import { FontSetup } from "./components/font_setup";
@@ -92,9 +92,9 @@ export function App({ store }: { store: Store }) {
     const pageHeight = (documentData?.height ?? 600) * 72 / 96;
     const zoom = state.zoom === "fit" ? Math.max(0.02, Math.min((available.width - 64) / pageWidth, (available.height - 64) / pageHeight)) : state.zoom;
     const svgPreview = documentData ? "data:image/svg+xml;charset=utf-8," + encodeURIComponent(documentData.sanitized) : "";
-    const missing = new Set(state.missingFonts.map(fontKey));
+    const hasMissingFonts = state.missingFonts.length > 0;
     const openFonts = () => {
-        closeFontsWhenReady.current = missing.size > 0;
+        closeFontsWhenReady.current = hasMissingFonts;
         setDialog("fonts");
     };
     const filesSelected = (input: HTMLInputElement, directory = false) => {
@@ -128,7 +128,7 @@ export function App({ store }: { store: Store }) {
                 <button onClick={() => store.dispatch({ type: "PASTE" })} disabled={state.busy || state.saving} title="Paste Objects (Ctrl+V / ⌘V)"><BsClipboard /> <span>Paste Objects <kbd>Ctrl+V</kbd></span></button>
                 <button className="save-button" onClick={() => store.dispatch({ type: "SAVE_PDF" })} disabled={!state.pdf || state.busy || state.saving} title="Save PDF (Ctrl+S / ⌘S)"><BsFileEarmarkArrowDown /> <span>Save PDF <kbd>Ctrl+S</kbd></span></button>
                 {overleaf.available && <div className="toolbar-overleaf">
-                    <button className="overleaf-upload-button" onClick={openOverleaf} disabled={!state.pdf || state.busy || state.saving || overleaf.busy} title="Upload to Overleaf" aria-label="Upload to Overleaf"><BsCloudArrowUp /> <span>Upload to Overleaf</span></button>
+                    <button onClick={openOverleaf} disabled={!state.pdf || state.busy || state.saving || overleaf.busy} title="Upload to Overleaf" aria-label="Upload to Overleaf"><BsCloudArrowUp /> <span>Upload to Overleaf</span></button>
                     {overleafUrl && <span className="overleaf-connection-indicator" role="status" aria-label="Overleaf connection" title={overleafUrl}>
                         <span className="connection-dot" aria-hidden="true" />
                         <span className="connection-text">Connected: {overleafProject}</span>
@@ -149,7 +149,7 @@ export function App({ store }: { store: Store }) {
                 <span className="toolbar-status-text" role="status" title={overleaf.status}>{overleaf.status}</span>
                 <button className="status-cancel" aria-label="Cancel Overleaf operation" title="Cancel" onClick={() => store.overleaf.dispatch({ type: "CANCEL" })}><BsX aria-hidden="true" /></button>
             </div>}
-            {(state.busy || (documentData && !missing.size)) && <div className="toolbar-status">
+            {(state.busy || (documentData && !hasMissingFonts)) && <div className="toolbar-status">
                 {state.busy ? <span className="spinner" aria-hidden="true" /> : <BsFonts aria-hidden="true" />}
                 <span className="toolbar-status-text" role="status" title={state.busy ? state.status : state.syntheticBoldFonts.map(font => `${fontLabel(font)} (synthesized)`).join(", ")}>{state.busy ? state.status
                     : state.syntheticBoldFonts.length ? "Fonts ready · synthesized bold"
@@ -160,7 +160,7 @@ export function App({ store }: { store: Store }) {
                 <input className="file-name-control" value={state.fileName} onChange={event => store.dispatch({ type: "SET_FILE_NAME", value: event.currentTarget.value })} aria-label="PDF file name" title="PDF file name" spellCheck={false} />
                 <ApplicationMenu>
                     <button aria-label="Open SVG" onClick={() => svgInput.current?.click()}><BsFolder2Open aria-hidden="true" />Open SVG…</button>
-                    <button className={missing.size ? "attention" : ""} onClick={openFonts}><BsFonts aria-hidden="true" />Fonts</button>
+                    <button className={hasMissingFonts ? "attention" : ""} onClick={openFonts}><BsFonts aria-hidden="true" />Fonts</button>
                     <button disabled={!documentData} onClick={() => setDialog("source")}><BsCodeSlash aria-hidden="true" />View source SVG</button>
                     <button onClick={() => setDialog("history")}><BsClockHistory aria-hidden="true" />Save history</button>
                     <button onClick={openOverleaf}><BsCloudArrowUp aria-hidden="true" />Overleaf…</button>
@@ -172,14 +172,14 @@ export function App({ store }: { store: Store }) {
             {state.error || "No file was saved. If you confirmed the dialog, the browser may have blocked the destination. Try another folder or download the PDF instead."}
             {state.saveFailed && state.pdf && <button className="save-fallback" disabled={state.busy || state.saving} onClick={() => store.dispatch({ type: "DOWNLOAD_PDF" })}>Download PDF instead</button>}
         </div>}
-        {documentData && missing.size > 0 && !state.fontLoading && <div className="notice font-warning" role="status">
+        {documentData && hasMissingFonts && !state.fontLoading && <div className="notice font-warning" role="status">
             <span>Missing fonts: {state.missingFonts.map(fontLabel).join(", ")}. {state.pdf
                 ? "The PDF uses substitute fonts and may look different. Add the missing fonts to restore the original appearance."
                 : state.busy ? "Looking for substitute fonts and preparing the PDF…"
                 : "Allow font access or add fonts to create the PDF."}</span>
             <button className="font-add" disabled={state.busy || state.saving} onClick={openFonts}>Add fonts…</button>
         </div>}
-        <main ref={previewArea} className={`preview-area ${dragging ? "dragging" : ""}`} aria-label="Figure preview" aria-busy={state.busy}>
+        <main ref={previewArea} className="preview-area" aria-label="Figure preview" aria-busy={state.busy}>
             {!documentData ? <div className="empty-state">
                 <BsClipboard className="empty-icon" />
                 <h1>kuroko 2</h1>
