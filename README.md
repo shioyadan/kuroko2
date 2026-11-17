@@ -142,8 +142,17 @@ saves the selected project PDF locally.
 The current pasted figure stays available while you preview a project PDF.
 Only PDFs stored in the project are listed; Overleaf's compiled document is not
 included. Connection state survives a browser reload while the launcher is
-running. Change project or stop the launcher to remove its temporary local clone.
-Credentials remain managed by Git, and are not entered or stored in the HTML app.
+running. Change project disconnects the current project. Local clones are kept in
+temporary storage so reconnecting, including after restarting the launcher, uses
+`fetch` to retrieve changes instead of cloning again. The cache is shared by
+launcher instances run by the same OS user, even on different ports. A missing
+or invalid local clone is recreated; a network failure leaves a valid cache intact.
+
+The cache contains the project and its Git history, normally under
+`/tmp/kuroko2-overleaf-cache-<user ID>/`. It may be removed by the OS. You can also
+delete that directory after stopping all kuroko 2 launchers; the next connection
+will clone again. Credentials remain managed by Git, and are not entered or
+stored in the HTML app.
 
 If a normal Overleaf fetch works but kuroko 2 cannot connect, restart the launcher
 with `KUROKO_DEBUG=1 ./kuroko2.sh` and try Connect again. The terminal shows Git
@@ -151,7 +160,7 @@ commands, working directories, exit codes and error messages. Credential-bearing
 URLs and headers are masked; PDF contents and Git configuration values are omitted.
 The launcher inherits configured Git credential helpers and `GIT_ASKPASS`.
 Settings stored only in an existing repository's `.git/config` do not apply to
-kuroko 2's temporary clone.
+kuroko 2's cached clone.
 
 
 ## Known limitations and troubleshooting

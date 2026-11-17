@@ -93,7 +93,7 @@ toolbar and paste/save flow follow the original Kuroko.
 | `src/store.ts` | Input, font resolution, conversion, cancellation and saving |
 | `src/overleaf.ts` | Overleaf connection, previews, upload confirmation and cancellation |
 | `src/overleaf_history.ts` | Named recent projects and project-specific upload destination suggestions |
-| `kuroko2_server.py` | Loopback HTTP server and temporary Git repository for Overleaf |
+| `kuroko2_server.py` | Loopback HTTP server and reusable Git repository cache for Overleaf |
 | `src/core/clipboard.ts` | Paste events, Async Clipboard API and UTF-8/UTF-16 decoding |
 | `src/core/svg.ts` | SVG validation/sanitization, dimensions and required fonts |
 | `src/core/fonts.ts` | SFNT/TTC metadata, embedding restrictions, deduplication and glyph coverage |
@@ -222,8 +222,22 @@ Stdin is never logged; stdout only displays object IDs, otherwise byte counts.
 Credential URL userinfo, URL query strings and recognized credential fields are
 masked. Debug output is off by default and is not written to files by the app.
 
-One temporary bare clone is retained per launcher process. Git plumbing builds a
-commit from the latest remote tree, changing only the selected PDF. The previously
+Bare clones live at `<tempdir>/kuroko2-overleaf-cache-<uid>/<sha256(url)>/project.git`.
+The key uses the server-normalized URL, so no extra browser identifier is needed.
+The root and per-project directories must be owned by the current user, private,
+and not symlinks. On connect, local bare-repository metadata, origin URL, default
+branch and tree are checked before a cached clone is fetched. Missing or invalid
+local repositories are cloned in a staging directory and atomically renamed into
+place. Fetch failures leave valid caches intact rather than causing a new clone.
+Disconnect and shutdown clear connection state but retain the cache. OS temporary
+storage cleanup can remove it, and users can delete it after stopping the launchers.
+Each project uses a nonblocking POSIX file lock (including in WSL) across launcher
+processes for clone, fetch, upload and preview reads; another active operation
+returns a busy response. Cancellation and exceptions release the lock.
+Automatic Git maintenance stays in the foreground with `gc.autoDetach=false`
+and `maintenance.autoDetach=false`, so it finishes while that lock is held.
+
+Git plumbing builds a commit from the latest remote tree, changing only the selected PDF. The previously
 listed blob ID is the overwrite precondition. Uploads also carry the displayed
 project URL, so switching projects in another tab cannot redirect a pending upload.
 Normal pushes never force the remote;
@@ -232,7 +246,7 @@ new confirmation. Identical bytes skip the commit. A failed push is followed by 
 fetch to check whether it actually succeeded. Cancellation interrupts the active
 Git process group; cancellation during push can leave an uncertain remote result,
 so the UI asks for a refresh before retrying. Each Git command has a 120-second
-timeout. Disconnect and server shutdown remove the temporary clone.
+timeout.
 
 The separate Overleaf Store keeps project PDF previews from replacing the pasted
 figure. It uses the existing PDFium worker to render page one. PDF downloads use

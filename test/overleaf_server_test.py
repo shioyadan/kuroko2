@@ -54,7 +54,8 @@ class GitFixture(unittest.TestCase):
         self.write("figures/existing.pdf", PDF)
         self.write("figures/日本語 space.PDF", PDF)
         self.commit_and_push("Initial project")
-        self.bridge = LocalBridge()
+        self.cache = self.root / "cache"
+        self.bridge = LocalBridge(cache_root=self.cache)
         self.addCleanup(self.bridge.close)
 
     def git(self, *args, cwd=None, data=None):
@@ -93,6 +94,250 @@ class GitFixture(unittest.TestCase):
 
 
 class BridgeTests(GitFixture):
+    def new_bridge(self):
+        bridge = LocalBridge(cache_root=self.cache)
+        self.addCleanup(bridge.close)
+        return bridge
+
+    def test_reconnect_reuses_clone_and_fetches_remote_changes(self):
+        with patch.object(self.bridge, "_git", wraps=self.bridge._git) as commands:
+            self.connect()
+            repo = self.bridge._repo
+            self.write("figures/existing.pdf", OTHER_PDF)
+            self.commit_and_push()
+            self.connect()
+        self.assertEqual(self.bridge._repo, repo)
+        self.assertEqual(sum(call.args[0] == "clone" for call in commands.call_args_list), 1)
+        self.assertEqual(sum(call.args[0] == "fetch" for call in commands.call_args_list), 1)
+        self.assertEqual(self.bridge.read_pdf("figures/existing.pdf", self.oid()), OTHER_PDF)
+        self.assertEqual(self.bridge._head.encode(), self.head())
+
+    def test_disconnect_and_new_launcher_reuse_cache_without_cloning(self):
+        self.connect()
+        repo = self.bridge._repo
+        self.bridge.disconnect()
+        self.assertTrue(repo.is_dir())
+        self.assertIsNone(self.bridge.snapshot()["url"])
+        self.bridge.close()
+        self.assertTrue(repo.is_dir())
+        self.write("figures/existing.pdf", EDITED_PDF)
+        self.commit_and_push()
+        restarted = self.new_bridge()
+        with patch.object(restarted, "_git", wraps=restarted._git) as commands:
+            snapshot = restarted.connect(str(self.remote))
+        self.assertEqual(restarted._repo, repo)
+        self.assertFalse(any(call.args[0] == "clone" for call in commands.call_args_list))
+        self.assertTrue(any(call.args[0] == "fetch" for call in commands.call_args_list))
+        oid = next(file["oid"] for file in snapshot["files"] if file["path"] == "figures/existing.pdf")
+        self.assertEqual(restarted.read_pdf("figures/existing.pdf", oid), EDITED_PDF)
+        restarted.close()
+        self.assertTrue(repo.is_dir())
+        self.assertIsNone(restarted.snapshot()["url"])
+
+    def test_invalid_cache_is_rebuilt_from_the_intended_remote(self):
+        self.connect()
+        repo = self.bridge._repo
+        for damage in ("head", "origin"):
+            with self.subTest(damage=damage):
+                self.bridge.disconnect()
+                if damage == "head":
+                    (repo / "HEAD").write_text("not a Git HEAD\n", encoding="utf-8")
+                else:
+                    self.git("--git-dir", str(repo), "config", "remote.origin.url", str(self.root / "wrong-project.git"))
+                with patch.object(self.bridge, "_git", wraps=self.bridge._git) as commands:
+                    snapshot = self.connect()
+                clones = [call.args for call in commands.call_args_list if call.args[0] == "clone"]
+                self.assertEqual(len(clones), 1)
+                self.assertIn(str(self.remote), clones[0])
+                self.assertEqual(snapshot["url"], str(self.remote))
+                self.assertEqual(self.bridge._repo, repo)
+                self.assertEqual(self.bridge.read_pdf("figures/existing.pdf", self.oid()), PDF)
+
+    def test_failed_clone_does_not_publish_a_partial_cache(self):
+        original_git = self.bridge._git
+
+        def interrupted_clone(*args, **kwargs):
+            if args[0] == "clone":
+                partial = Path(args[-1])
+                partial.mkdir(parents=True)
+                (partial / "HEAD").write_text("unfinished clone\n", encoding="utf-8")
+                raise GitFailure(b"remote: no healthy upstream\nfatal: HTTP 503")
+            return original_git(*args, **kwargs)
+
+        with patch.object(self.bridge, "_git", side_effect=interrupted_clone):
+            self.assert_rejected(self.connect, "git_error")
+        self.assertIsNone(self.bridge.snapshot()["url"])
+        self.assertEqual(list(self.cache.rglob("project.git")), [])
+        self.assertEqual(self.connect()["url"], str(self.remote))
+
+    def test_failed_cached_fetch_keeps_clone_and_does_not_retry_with_clone(self):
+        self.connect()
+        repo = self.bridge._repo
+        before = self.bridge.snapshot()
+        original_git = self.bridge._git
+
+        def unavailable_remote(*args, **kwargs):
+            if args[0] == "fetch":
+                raise GitFailure(b"remote: no healthy upstream\nfatal: HTTP 503")
+            return original_git(*args, **kwargs)
+
+        with patch.object(self.bridge, "_git", side_effect=unavailable_remote) as commands:
+            self.assert_rejected(self.connect, "git_error")
+        self.assertFalse(any(call.args[0] == "clone" for call in commands.call_args_list))
+        self.assertEqual(self.bridge.snapshot(), before)
+        self.assertEqual(self.bridge._repo, repo)
+        self.assertTrue(repo.is_dir())
+        self.assertEqual(self.bridge.read_pdf("figures/existing.pdf", self.oid()), PDF)
+        with patch.object(self.bridge, "_git", wraps=self.bridge._git) as commands:
+            self.connect()
+        self.assertFalse(any(call.args[0] == "clone" for call in commands.call_args_list))
+
+    def test_shared_cache_serializes_git_operations_and_releases_after_failure(self):
+        self.connect()
+        other = self.new_bridge()
+        other.connect(str(self.remote))
+        self.assertEqual(other._repo, self.bridge._repo)
+        original_git = self.bridge._git
+        attempted = []
+
+        def overlapping_fetch(*args, **kwargs):
+            if args[0] == "fetch":
+                attempted.append(args)
+                self.assert_rejected(other.refresh, "busy")
+            return original_git(*args, **kwargs)
+
+        with patch.object(self.bridge, "_git", side_effect=overlapping_fetch):
+            self.bridge.refresh()
+        self.assertEqual(len(attempted), 1)
+        other.refresh()
+        with patch.object(self.bridge, "_git", side_effect=GitFailure(b"remote unavailable")):
+            self.assert_rejected(self.bridge.refresh, "git_error")
+        self.assertEqual(other.refresh()["url"], str(self.remote))
+        result = other.upload("figures/shared.pdf", "", EDITED_PDF)
+        self.assertEqual(result["result"], "uploaded")
+        self.assertEqual(self.contents("figures/shared.pdf"), EDITED_PDF)
+
+    def test_switching_projects_keeps_separate_reusable_clones(self):
+        self.connect()
+        first_repo = self.bridge._repo
+        other_remote = self.root / "other-project.git"
+        self.git("clone", "--bare", str(self.remote), str(other_remote))
+        self.bridge.connect(str(other_remote))
+        second_repo = self.bridge._repo
+        self.assertNotEqual(first_repo, second_repo)
+        self.assertTrue(first_repo.is_dir())
+        self.assertTrue(second_repo.is_dir())
+        with patch.object(self.bridge, "_git", wraps=self.bridge._git) as commands:
+            self.connect()
+        self.assertEqual(self.bridge._repo, first_repo)
+        self.assertFalse(any(call.args[0] == "clone" for call in commands.call_args_list))
+
+    def test_failed_fetch_when_switching_projects_keeps_previous_connection(self):
+        self.connect()
+        first_repo = self.bridge._repo
+        other_remote = self.root / "other-project.git"
+        self.git("clone", "--bare", str(self.remote), str(other_remote))
+        self.bridge.connect(str(other_remote))
+        second_repo = self.bridge._repo
+        self.connect()
+        before = self.bridge.snapshot()
+        original_git = self.bridge._git
+
+        def unavailable_project(*args, **kwargs):
+            if args[0] == "fetch" and kwargs.get("repo") == second_repo:
+                raise GitFailure(b"remote: no healthy upstream\nfatal: HTTP 503")
+            return original_git(*args, **kwargs)
+
+        with patch.object(self.bridge, "_git", side_effect=unavailable_project) as commands:
+            self.assert_rejected(lambda: self.bridge.connect(str(other_remote)), "git_error")
+        self.assertFalse(any(call.args[0] == "clone" for call in commands.call_args_list))
+        self.assertEqual(self.bridge._repo, first_repo)
+        self.assertEqual(self.bridge.snapshot(), before)
+        self.assertTrue(second_repo.is_dir())
+        self.assertEqual(self.bridge.read_pdf("figures/existing.pdf", self.oid()), PDF)
+        result = self.bridge.upload("figures/after-failed-switch.pdf", "", EDITED_PDF,
+                                    expected_project=str(self.remote))
+        self.assertEqual(result["result"], "uploaded")
+        self.assertEqual(self.contents("figures/after-failed-switch.pdf"), EDITED_PDF)
+        other_paths = self.git("--git-dir", str(other_remote), "ls-tree", "--name-only", "-r", "master").splitlines()
+        self.assertNotIn(b"figures/after-failed-switch.pdf", other_paths)
+
+    def test_symlinked_cache_repository_is_not_followed_or_deleted(self):
+        self.connect()
+        repo = self.bridge._repo
+        self.bridge.disconnect()
+        saved_repo = repo.with_name("preserved.git")
+        repo.rename(saved_repo)
+        repo.symlink_to(saved_repo, target_is_directory=True)
+        with patch.object(self.bridge, "_git", wraps=self.bridge._git) as commands:
+            self.assert_rejected(self.connect)
+        self.assertFalse(any(call.args[0] in ("clone", "fetch") for call in commands.call_args_list))
+        self.assertTrue(repo.is_symlink())
+        self.assertTrue(saved_repo.is_dir())
+        self.assertIsNone(self.bridge.snapshot()["url"])
+
+    def test_symlinked_cache_root_is_not_used(self):
+        elsewhere = self.root / "unrelated-directory"
+        elsewhere.mkdir(mode=0o700)
+        sentinel = elsewhere / "keep.txt"
+        sentinel.write_text("Keep this file", encoding="utf-8")
+        self.cache.symlink_to(elsewhere, target_is_directory=True)
+        with patch.object(self.bridge, "_git", wraps=self.bridge._git) as commands:
+            self.assert_rejected(self.connect, "cache_error")
+        commands.assert_not_called()
+        self.assertEqual(list(elsewhere.iterdir()), [sentinel])
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "Keep this file")
+
+    def test_cancelling_cached_fetch_releases_project_lock_and_keeps_cache(self):
+        self.connect()
+        repo = self.bridge._repo
+        other = self.new_bridge()
+        other.connect(str(self.remote))
+        started = threading.Event()
+        errors = []
+        original_git = self.bridge._git
+
+        def slow_fetch(*args, **kwargs):
+            if args[0] == "fetch":
+                started.set()
+                return original_git("-c", "alias.fixture-wait=!sleep 20", "fixture-wait")
+            return original_git(*args, **kwargs)
+
+        def refresh():
+            try:
+                self.bridge.refresh("cancel-cached-fetch")
+            except Exception as error:
+                errors.append(error)
+
+        with patch.object(self.bridge, "_git", side_effect=slow_fetch):
+            worker = threading.Thread(target=refresh, daemon=True)
+            worker.start()
+            try:
+                self.assertTrue(started.wait(timeout=3))
+                self.assert_rejected(other.refresh, "busy")
+                self.assertTrue(self.bridge.cancel("cancel-cached-fetch")["cancelled"])
+                worker.join(timeout=3)
+                self.assertFalse(worker.is_alive())
+            finally:
+                self.bridge.cancel("cancel-cached-fetch")
+                worker.join(timeout=3)
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(getattr(errors[0], "code", None), "cancelled")
+        self.assertTrue(repo.is_dir())
+        self.assertEqual(other.refresh()["url"], str(self.remote))
+        self.assertEqual(self.bridge.read_pdf("figures/existing.pdf", self.oid()), PDF)
+
+    def test_list_and_read_only_pdf_blobs(self):
+        self.assertIsNone(self.bridge.snapshot()["url"])
+        snapshot = self.connect()
+        self.assertEqual(snapshot["api"], "kuroko-overleaf-v1")
+        self.assertTrue(snapshot["session"])
+        self.assertEqual({item["path"] for item in snapshot["files"]},
+                         {"figures/existing.pdf", "figures/日本語 space.PDF"})
+        self.assertEqual(snapshot["folders"], ["figures"])
+        self.assertEqual(self.bridge.read_pdf("figures/existing.pdf", self.oid()), PDF)
+        self.assert_rejected(lambda: self.bridge.read_pdf("paper.tex", self.oid()))
+
     def test_folders_include_destinations_without_existing_pdfs(self):
         self.write("sections/introduction.tex", b"Introduction\n")
         self.write("assets/diagrams/source.svg", b"<svg/>\n")
@@ -106,18 +351,6 @@ class BridgeTests(GitFixture):
         self.assertEqual(result["result"], "uploaded")
         self.assertEqual(self.contents("assets/diagrams/new.pdf"), EDITED_PDF)
         self.assertEqual(self.contents("assets/diagrams/source.svg"), b"<svg/>\n")
-
-
-    def test_list_and_read_only_pdf_blobs(self):
-        self.assertIsNone(self.bridge.snapshot()["url"])
-        snapshot = self.connect()
-        self.assertEqual(snapshot["api"], "kuroko-overleaf-v1")
-        self.assertTrue(snapshot["session"])
-        self.assertEqual({item["path"] for item in snapshot["files"]},
-                         {"figures/existing.pdf", "figures/日本語 space.PDF"})
-        self.assertEqual(snapshot["folders"], ["figures"])
-        self.assertEqual(self.bridge.read_pdf("figures/existing.pdf", self.oid()), PDF)
-        self.assert_rejected(lambda: self.bridge.read_pdf("paper.tex", self.oid()))
 
     def test_upload_changes_only_one_file_and_identical_upload_has_no_commit(self):
         self.connect()

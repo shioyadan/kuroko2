@@ -2,8 +2,10 @@
 """Serve the single HTML app and bridge its Overleaf requests to local Git."""
 
 import argparse
+from contextlib import contextmanager, nullcontext
 import errno
-from contextlib import contextmanager
+import fcntl
+import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -12,7 +14,9 @@ from pathlib import Path
 import re
 import secrets
 import shlex
+import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -72,20 +76,22 @@ class GitFailure(Exception):
 
 
 class OverleafBridge:
-    """One private bare clone, with one cancellable operation at a time.
+    """One connected project, backed by reusable private bare clones in temp storage.
 
     Tests can override validate_url to use a local bare repository. Production
     never accepts a local path, command, credential, or arbitrary remote host.
     """
 
-    def __init__(self):
+    def __init__(self, cache_root=None):
         self.session = secrets.token_urlsafe(32)
         self._operation_lock = threading.Lock()
         self._state_lock = threading.Lock()
         self._active = None
         self._cancelled = threading.Event()
         self._process = None
-        self._temp = None
+        self._cache_root = Path(cache_root) if cache_root is not None else (
+            Path(tempfile.gettempdir()) / f"kuroko2-overleaf-cache-{os.getuid()}"
+        )
         self._repo = None
         self._branch = None
         self._url = None
@@ -148,7 +154,7 @@ class OverleafBridge:
             }
 
     @contextmanager
-    def _operation(self, operation):
+    def _operation(self, operation, repository=False):
         operation = self._validate_operation(operation or secrets.token_hex(16))
         if not self._operation_lock.acquire(blocking=False):
             raise BridgeError("Another Overleaf operation is running.", "busy", 409)
@@ -156,7 +162,8 @@ class OverleafBridge:
             self._active = operation
             self._cancelled.clear()
         try:
-            yield
+            with self._lock_cache(self._repo.parent) if repository and self._repo is not None else nullcontext():
+                yield
         except GitFailure as error:
             self._raise_git_error(error)
         finally:
@@ -164,6 +171,43 @@ class OverleafBridge:
                 self._active = None
                 self._process = None
             self._operation_lock.release()
+
+    @staticmethod
+    def _private_directory(directory):
+        try:
+            directory.mkdir(mode=0o700, exist_ok=True)
+            info = directory.lstat()
+        except OSError:
+            raise BridgeError("Cannot open the local Overleaf cache. Check temporary storage and its permissions.", "cache_error", 500) from None
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            raise BridgeError("The local Overleaf cache must be a private directory owned by this user.", "cache_error", 500)
+
+    def _cache_directory(self, url):
+        self._private_directory(self._cache_root)
+        directory = self._cache_root / hashlib.sha256(url.encode("utf-8")).hexdigest()
+        self._private_directory(directory)
+        return directory
+
+    @contextmanager
+    def _lock_cache(self, directory):
+        self._private_directory(directory)
+        try:
+            descriptor = os.open(directory / "lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        except OSError:
+            raise BridgeError("Cannot open the local Overleaf cache lock. Check temporary storage and its permissions.", "cache_error", 500) from None
+        with os.fdopen(descriptor, "a+b") as lock:
+            info = os.fstat(lock.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+                raise BridgeError("The local Overleaf cache lock is not a private file.", "cache_error", 500)
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise BridgeError("This project is busy in another kuroko 2 window. Try again shortly.", "busy", 409) from None
+            try:
+                self._check_cancelled()
+                yield
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
     @staticmethod
     def _raise_git_error(error):
@@ -224,6 +268,8 @@ class OverleafBridge:
         command = [
             "git", "-c", "core.hooksPath=/dev/null", "-c", "protocol.ext.allow=never",
             "-c", "http.followRedirects=false",
+            # Keep Git's automatic maintenance inside the per-project lock.
+            "-c", "gc.autoDetach=false", "-c", "maintenance.autoDetach=false",
         ]
         if repo is not None or self._repo is not None:
             command += ["-C", str(repo if repo is not None else self._repo)]
@@ -297,49 +343,80 @@ class OverleafBridge:
         self._git("fetch", "--no-tags", "origin", "+" + self._branch + ":" + self._branch)
         self._publish(self._inspect(self._repo, self._branch))
 
+    def _cached_branch(self, repo, url):
+        """Validate local metadata before contacting a cached repository's remote."""
+        if not repo.exists() and not repo.is_symlink():
+            return None
+        info = repo.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+            raise BridgeError("The cached Overleaf repository is not a directory owned by this user.", "cache_error", 500)
+        try:
+            if self._git("rev-parse", "--is-bare-repository", repo=repo).strip() != b"true":
+                return None
+            if self._git("config", "--local", "--get-all", "remote.origin.url", repo=repo).decode().strip() != url:
+                return None
+            branch = self._git("symbolic-ref", "HEAD", repo=repo).decode().strip()
+            if not branch.startswith("refs/heads/"):
+                return None
+            self._inspect(repo, branch)
+            return branch
+        except (GitFailure, UnicodeError):
+            return None
+
+    def _clear_connection(self):
+        with self._state_lock:
+            self._repo = self._branch = self._url = self._head = None
+            self._files, self._entries = [], {}
+
     def connect(self, url, operation=None):
         url = self.validate_url(url)
         with self._operation(operation):
-            temporary = tempfile.TemporaryDirectory(prefix="kuroko2-overleaf-")
-            repo = Path(temporary.name) / "project.git"
-            try:
-                # The empty directory also keeps clone independent of a prior connection.
-                self._git("clone", "--bare", "--", url, str(repo), repo=temporary.name)
-                branch = self._git("symbolic-ref", "HEAD", repo=repo).decode().strip()
-                if not branch.startswith("refs/heads/"):
-                    raise BridgeError("The project has no default Git branch.", "git_error", 502)
-                inspected = self._inspect(repo, branch)
+            directory = self._cache_directory(url)
+            repo = directory / "project.git"
+            with self._lock_cache(directory):
+                branch = self._cached_branch(repo, url)
+                if branch:
+                    debug_log("cache: reusing " + str(repo))
+                    # Network failures leave a good cache intact, never trigger another clone.
+                    self._git("fetch", "--no-tags", "origin", "+" + branch + ":" + branch, repo=repo)
+                    inspected = self._inspect(repo, branch)
+                else:
+                    if repo.exists():
+                        debug_log("cache: rebuilding invalid repository " + str(repo))
+                        if self._repo == repo:
+                            self._clear_connection()
+                        shutil.rmtree(repo)
+                    debug_log("cache: cloning into " + str(repo))
+                    # Publish only a complete clone. Failure/cancellation removes the staging directory.
+                    with tempfile.TemporaryDirectory(dir=directory, prefix="clone-") as temporary:
+                        staged = Path(temporary) / "project.git"
+                        self._git("clone", "--bare", "--", url, str(staged), repo=temporary)
+                        branch = self._git("symbolic-ref", "HEAD", repo=staged).decode().strip()
+                        if not branch.startswith("refs/heads/"):
+                            raise BridgeError("The project has no default Git branch.", "git_error", 502)
+                        inspected = self._inspect(staged, branch)
+                        self._check_cancelled()
+                        staged.rename(repo)
                 self._check_cancelled()
-            except BaseException:
-                temporary.cleanup()
-                raise
-            old_temp = self._temp
-            with self._state_lock:
-                self._temp, self._repo, self._branch, self._url = temporary, repo, branch, url
-                self._head, self._entries, self._files = inspected
-            if old_temp:
-                old_temp.cleanup()
+                with self._state_lock:
+                    self._repo, self._branch, self._url = repo, branch, url
+                    self._head, self._entries, self._files = inspected
             return self.snapshot()
 
     def refresh(self, operation=None):
-        with self._operation(operation):
+        with self._operation(operation, repository=True):
             self._require_connection()
             self._fetch()
             return self.snapshot()
 
     def disconnect(self, operation=None):
         with self._operation(operation):
-            old_temp = self._temp
-            with self._state_lock:
-                self._temp = self._repo = self._branch = self._url = self._head = None
-                self._files, self._entries = [], {}
-            if old_temp:
-                old_temp.cleanup()
+            self._clear_connection()
             return self.snapshot()
 
     def read_pdf(self, path, oid, operation=None):
         self.validate_path(path)
-        with self._operation(operation):
+        with self._operation(operation, repository=True):
             self._require_connection()
             file = next((file for file in self._files if file["path"] == path), None)
             if not file or file["oid"] != oid:
@@ -374,7 +451,7 @@ class OverleafBridge:
         return identity
 
     def _commit_pdf(self, path, oid, head):
-        with tempfile.TemporaryDirectory(dir=self._temp.name, prefix="index-") as directory:
+        with tempfile.TemporaryDirectory(dir=self._repo.parent, prefix="index-") as directory:
             env = {"GIT_INDEX_FILE": str(Path(directory) / "index"), **self._author()}
             self._git("read-tree", head, env_extra=env)
             mode = self._entries.get(path, {}).get("mode", "100644")
@@ -393,7 +470,7 @@ class OverleafBridge:
             raise BridgeError("This PDF exceeds the 50 MiB limit.", "too_large", 413)
         if not data.startswith(b"%PDF-"):
             raise BridgeError("Only PDF files can be uploaded.", "invalid_pdf")
-        with self._operation(operation):
+        with self._operation(operation, repository=True):
             self._require_connection()
             if expected_project is not None and expected_project != self._url:
                 raise BridgeError(
@@ -454,9 +531,7 @@ class OverleafBridge:
                 self._cancelled.set()
                 self._stop_process(self._process)
         with self._operation_lock:
-            if self._temp:
-                self._temp.cleanup()
-                self._temp = None
+            self._clear_connection()
 
 
 def make_server(index_file, port=0, bridge=None):
@@ -608,7 +683,6 @@ def make_available_server(index_file, port):
             if error.errno != errno.EADDRINUSE:
                 raise
     raise OSError(errno.EADDRINUSE, f"No available port between {port} and 65535.")
-
 
 
 def main():
