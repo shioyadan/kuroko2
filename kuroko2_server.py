@@ -10,10 +10,13 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shlex
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
+import time
 from urllib.parse import parse_qs, urlsplit
 
 
@@ -21,6 +24,38 @@ MAX_PDF_BYTES = 50 * 1024 * 1024
 MAX_JSON_BYTES = 16 * 1024
 GIT_TIMEOUT_SECONDS = 120
 API_VERSION = "kuroko-overleaf-v1"
+
+
+def redact_debug(text):
+    """Mask credential-bearing URLs/fields before writing bounded terminal logs."""
+    text = re.sub(r"(?i)(https?://[^\s'\"?#]+)[?#][^\s'\"]*", r"\1?[redacted]", text)
+    text = re.sub(r"(?i)(https?://)([^\s/?#]*@)",
+                  lambda match: match[1] + ("git@" if match[2] == "git@" else "[redacted]@"), text)
+    text = re.sub(r"(?im)^.*(?:authorization|cookie|password|passwd|token|secret|extraheader)\s*[:=].*$",
+                  "[redacted credential field]", text)
+    text = re.sub(r"\b(?:olp_|gh[pousr]_|glpat-)[A-Za-z0-9_-]+", "[redacted]", text)
+    text = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", lambda match: f"\\x{ord(match[0]):02x}", text)
+    return text[:6000] + ("\n[truncated]" if len(text) > 6000 else "")
+
+
+def debug_log(text):
+    if os.environ.get("KUROKO_DEBUG") == "1":
+        for line in redact_debug(text).splitlines():
+            print("[kuroko git] " + line, file=sys.stderr, flush=True)
+
+
+def debug_result(stdout, stderr, returncode, started, outcome=""):
+    if os.environ.get("KUROKO_DEBUG") != "1":
+        return
+    debug_log(f"result: exit={returncode}, elapsed={time.monotonic() - started:.2f}s {outcome}".rstrip())
+    # Only object IDs are displayed verbatim. Config values, tree listings and
+    # PDF bytes can contain private data, and are represented by their size.
+    if re.fullmatch(rb"(?:[0-9a-f]{40}|[0-9a-f]{64})\n?", stdout):
+        debug_log("stdout: " + stdout.decode("ascii").strip())
+    else:
+        debug_log(f"stdout: {len(stdout)} bytes" + (" (contents omitted)" if stdout else ""))
+    if stderr:
+        debug_log("stderr:\n" + stderr.decode("utf-8", "replace"))
 
 
 class BridgeError(Exception):
@@ -171,7 +206,6 @@ class OverleafBridge:
             env.pop(name, None)
         env.update({
             "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "Never",
-            "GIT_ASKPASS": "/bin/false", "SSH_ASKPASS": "/bin/false",
             "LC_ALL": "C",
         })
         if env_extra:
@@ -183,6 +217,14 @@ class OverleafBridge:
         if repo is not None or self._repo is not None:
             command += ["-C", str(repo if repo is not None else self._repo)]
         command += list(args)
+        started = time.monotonic()
+        debug_log("cwd: " + str(repo if repo is not None else self._repo or Path.cwd()))
+        debug_log("$ " + shlex.join(command))
+        debug_log("auth: GIT_TERMINAL_PROMPT=0, GCM_INTERACTIVE=Never, "
+                  + ", ".join(name + ("=set (inherited)" if env.get(name) else "=not set")
+                              for name in ("GIT_ASKPASS", "SSH_ASKPASS")))
+        if data is not None:
+            debug_log(f"stdin: {len(data)} bytes (contents omitted)")
         try:
             with self._state_lock:
                 self._check_cancelled()
@@ -196,13 +238,16 @@ class OverleafBridge:
                 stdout, stderr = process.communicate(data, timeout=GIT_TIMEOUT_SECONDS)
             except subprocess.TimeoutExpired:
                 self._stop_process(process)
-                process.communicate()
+                stdout, stderr = process.communicate()
+                debug_result(stdout, stderr, process.returncode, started, "timed out")
                 raise BridgeError("Git timed out. Check the connection and try again.", "timeout", 504) from None
             finally:
                 with self._state_lock:
                     self._process = None
         except FileNotFoundError:
+            debug_log("result: Git executable was not found")
             raise BridgeError("Git is not installed in the environment running kuroko2.sh.", "git_missing", 503) from None
+        debug_result(stdout, stderr, process.returncode, started, "cancelled" if self._cancelled.is_set() else "")
         self._check_cancelled()
         if process.returncode:
             raise GitFailure(stderr)

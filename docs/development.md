@@ -205,9 +205,16 @@ when Menu → Overleaf is opened. Conversion remains entirely in the single HTML
 The server binds to `127.0.0.1`, validates Host and Origin, and requires a random
 process session header for all project operations. It accepts only Overleaf HTTPS
 Git URLs, relative PDF paths, and PDFs up to 50 MiB. Credentials are supplied by
-the existing Git credential helper, with interactive prompts disabled. No token
+the existing Git credential helper or inherited askpass configuration, with
+terminal prompts disabled. No token
 is accepted in the URL or stored in browser state. Git hooks and HTTP redirects
 are disabled, and subprocesses receive argument arrays, never shell commands.
+
+`KUROKO_DEBUG=1 ./kuroko2.sh` logs commands, working directories, authentication
+environment presence, exit codes, duration and redacted stderr to the terminal.
+Stdin is never logged; stdout only displays object IDs, otherwise byte counts.
+Credential URL userinfo, URL query strings and recognized credential fields are
+masked. Debug output is off by default and is not written to files by the app.
 
 One temporary bare clone is retained per launcher process. Git plumbing builds a
 commit from the latest remote tree, changing only the selected PDF. The previously

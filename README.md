@@ -122,6 +122,14 @@ included. Connection state survives a browser reload while the launcher is
 running. Disconnect or stop the launcher to remove its temporary local clone.
 Credentials remain managed by Git, and are not entered or stored in the HTML app.
 
+If a normal Overleaf fetch works but kuroko 2 cannot connect, restart the launcher
+with `KUROKO_DEBUG=1 ./kuroko2.sh` and try Connect again. The terminal shows Git
+commands, working directories, exit codes and error messages. Credential-bearing
+URLs and headers are masked; PDF contents and Git configuration values are omitted.
+The launcher inherits configured Git credential helpers and `GIT_ASKPASS`.
+Settings stored only in an existing repository's `.git/config` do not apply to
+kuroko 2's temporary clone.
+
 
 ## Known limitations and troubleshooting
 
