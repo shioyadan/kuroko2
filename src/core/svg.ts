@@ -62,12 +62,20 @@ function safeValue(value: string): boolean {
     }
     return !/url/i.test(value.replace(/url\s*\([^)]*\)/gi, ""));
 }
-function inherited(node: Element, name: string, fallback: string): string {
+export function inherited(node: Element, name: string, fallback: string): string {
     for (let current: Element | null = node; current; current = current.parentElement) {
         const value = current.getAttribute(name);
         if (value && value !== "inherit") return value;
     }
     return fallback;
+}
+export function textFont(node: Element): Omit<FontRequirement, "text"> {
+    const family = inherited(node, "font-family", "Times New Roman").split(",")[0].trim().replace(/^['"]|['"]$/g, "").replace(/_MSFontService$/i, "");
+    const weightValue = inherited(node, "font-weight", "400");
+    const weight = weightValue === "bold" ? 700 : weightValue === "normal" ? 400 : Number(weightValue);
+    if (!Number.isFinite(weight) || weight < 100 || weight > 900) throw new Error(`Unsupported font weight: ${weightValue}`);
+    if (inherited(node, "font-stretch", "normal") !== "normal") throw new Error("font-stretch is not supported. Use the explicit Narrow font family.");
+    return { family, weight, style: /italic|oblique/.test(inherited(node, "font-style", "normal")) ? "italic" : "normal" };
 }
 function collectFonts(root: Element): FontRequirement[] {
     const fonts = new Map<string, FontRequirement>();
@@ -75,16 +83,11 @@ function collectFonts(root: Element): FontRequirement[] {
         if (inherited(node, "display", "inline") === "none") continue;
         const text = [...node.childNodes].filter(child => child.nodeType === 3).map(child => child.textContent ?? "").join("");
         if (!text.trim()) continue;
-        const family = inherited(node, "font-family", "Times New Roman").split(",")[0].trim().replace(/^['"]|['"]$/g, "").replace(/_MSFontService$/i, "");
-        const weightValue = inherited(node, "font-weight", "400");
-        const weight = weightValue === "bold" ? 700 : weightValue === "normal" ? 400 : Number(weightValue);
-        if (!Number.isFinite(weight) || weight < 100 || weight > 900) throw new Error(`Unsupported font weight: ${weightValue}`);
-        if (inherited(node, "font-stretch", "normal") !== "normal") throw new Error("font-stretch is not supported. Use the explicit Narrow font family.");
-        const requirement: FontRequirement = { family, weight, style: /italic|oblique/.test(inherited(node, "font-style", "normal")) ? "italic" : "normal", text };
+        const requirement: FontRequirement = { ...textFont(node), text };
         const key = fontKey(requirement);
         fonts.set(key, { ...requirement, text: (fonts.get(key)?.text ?? "") + text });
         // Office sometimes appends a service suffix that fontdb cannot resolve.
-        node.setAttribute("font-family", family);
+        node.setAttribute("font-family", requirement.family);
     }
     return [...fonts.values()];
 }

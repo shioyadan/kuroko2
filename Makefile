@@ -24,6 +24,7 @@ production-smoke: production
 	node test/web_app_smoke.cjs
 	node test/save_history_smoke.cjs
 	node test/local_fonts_smoke.cjs
+	node test/synthetic_bold_smoke.cjs
 clean:
 	rm -rf dist-web dist-release
 

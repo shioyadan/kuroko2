@@ -20,6 +20,7 @@ export interface StoreSnapshot {
     readonly status: string;
     readonly error: string;
     readonly missingFonts: readonly FontRequirement[];
+    readonly syntheticBoldFonts: readonly FontRequirement[];
     readonly loadedFonts: readonly string[];
     readonly fontAccess: LocalFontAccess;
     readonly fontLoading: boolean;
@@ -61,7 +62,7 @@ function aborted(error: unknown): boolean { return error instanceof DOMException
 export class Store {
     private state: StoreSnapshot = {
         document: null, pdf: null, preview: null, busy: false, saving: false, saveFailed: false,
-        status: "Copy a figure in PowerPoint, then paste it here.", error: "", missingFonts: [], loadedFonts: [], fontAccess: "unknown", fontLoading: false,
+        status: "Copy a figure in PowerPoint, then paste it here.", error: "", missingFonts: [], syntheticBoldFonts: [], loadedFonts: [], fontAccess: "unknown", fontLoading: false,
         fileName: "figure.pdf", source: "", zoom: "fit",
         history: [], suggestions: [], suggestionOpen: false, suggestNames: true, historyPersistent: true
     };
@@ -122,7 +123,7 @@ export class Store {
             }
             case "LOAD_FINISH":
                 this.memory = null; this.nameEdited = false; this.promptForDocument = true;
-                this.publish({ document: action.document, pdf: null, preview: null, missingFonts: this.fonts.missing(action.document.fonts), source: action.source });
+                this.publish({ document: action.document, pdf: null, preview: null, missingFonts: this.fonts.missing(action.document.fonts), syntheticBoldFonts: this.fonts.syntheticBold(action.document.fonts), source: action.source });
                 action.document.warnings.forEach(warning => console.warn(warning));
                 console.info(`SVG loaded: ${action.source}; ${action.document.width.toFixed(1)} × ${action.document.height.toFixed(1)} CSS px.`);
                 void this.resolveAndConvert(action.id);
@@ -294,7 +295,8 @@ export class Store {
             await this.scanFontFolder(id);
             if (id !== this.requestId) return;
             const missingFonts = this.fonts.missing(document.fonts);
-            this.publish({ missingFonts, fontLoading: false, loadedFonts: this.fonts.labels(), pdf: null, preview: null });
+            const syntheticBoldFonts = this.fonts.syntheticBold(document.fonts);
+            this.publish({ missingFonts, syntheticBoldFonts, fontLoading: false, loadedFonts: this.fonts.labels(), pdf: null, preview: null });
             if (missingFonts.length) {
                 console.warn(`Missing fonts: ${missingFonts.map(fontLabel).join(", ")}`);
                 this.publish({ busy: false, status: "Choose Add fonts… to complete the PDF." });
@@ -302,7 +304,8 @@ export class Store {
             }
             this.publish({ status: "Creating PDF…" });
             const signal = this.controller!.signal;
-            const bytes = await convertSvg(document, this.fonts.forConversion(document.fonts), signal);
+            if (syntheticBoldFonts.length) console.info(`Using synthesized bold: ${syntheticBoldFonts.map(fontLabel).join(", ")}`);
+            const bytes = await convertSvg(document, this.fonts.forConversion(document.fonts), signal, syntheticBoldFonts);
             if (id !== this.requestId) return;
             this.publish({ status: "Rendering PDF preview…" });
             const preview = await renderPdf(bytes, signal);

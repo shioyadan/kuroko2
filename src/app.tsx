@@ -129,8 +129,9 @@ export function App({ store }: { store: Store }) {
             <span className="toolbar-spacer" />
             {(documentData || state.busy) && <div className={`toolbar-status ${missing.size && !state.busy ? "toolbar-status-needed" : ""}`}>
                 {state.busy ? <span className="spinner" aria-hidden="true" /> : <BsFonts aria-hidden="true" />}
-                <span className="toolbar-status-text" role="status" title={state.busy ? state.status : state.missingFonts.map(fontLabel).join(", ")}>{state.busy ? state.status
+                <span className="toolbar-status-text" role="status" title={state.busy ? state.status : missing.size ? state.missingFonts.map(fontLabel).join(", ") : state.syntheticBoldFonts.map(font => `${fontLabel(font)} (synthesized)`).join(", ")}>{state.busy ? state.status
                     : missing.size ? `Fonts needed (${missing.size})`
+                    : state.syntheticBoldFonts.length ? "Fonts ready · synthesized bold"
                     : documentData?.fonts.length ? "Fonts ready" : "No fonts needed"}</span>
                 {state.busy ? <button className="status-cancel" aria-label={state.fontLoading ? "Cancel font loading" : "Cancel"} title="Cancel" onClick={() => store.dispatch({ type: "CANCEL" })}><BsX aria-hidden="true" /></button>
                     : missing.size > 0 && !state.busy && <button className="font-add" onClick={openFonts}>Add fonts…</button>}

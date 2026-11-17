@@ -104,6 +104,13 @@ export function embeddingAllowed(face: FontFaceInfo): boolean {
 function faceMatches(face: FontFaceInfo, requirement: FontRequirement): boolean {
     return face.weight === requirement.weight && face.style === requirement.style && face.aliases.some(alias => normalizeFontFamily(alias) === normalizeFontFamily(requirement.family));
 }
+function syntheticBoldSource(requirement: FontRequirement): FontRequirement | undefined {
+    // Cambria Math ships only a regular face; Office can still request GDI's
+    // synthesized bold. Other families/styles stay strict until their rendering
+    // has been checked against a native reference as well.
+    return normalizeFontFamily(requirement.family) === "cambria math" && requirement.weight === 700 && requirement.style === "normal"
+        ? { ...requirement, weight: 400 } : undefined;
+}
 function hasGlyph(font: LoadedFont, face: FontFaceInfo, code: number): boolean {
     if (!face.cmap) return false;
     const v = new DataView(font.bytes.buffer, font.bytes.byteOffset, font.bytes.byteLength);
@@ -154,13 +161,30 @@ export class FontRegistry {
     private fonts: LoadedFont[] = [];
     private hashes = new Set<string>();
     private catalog: LocalFont[] | null = null;
+    private loadedLocalFonts = new Set<string>();
     private localQuery: Promise<LocalFontAccess> | null = null;
     private prompted = false;
     private totalBytes = 0;
     get loaded(): readonly LoadedFont[] { return this.fonts; }
     get hasCatalog(): boolean { return this.catalog !== null; }
+    private exact(requirement: FontRequirement): { font: LoadedFont; face: FontFaceInfo } | undefined {
+        for (const font of this.fonts) {
+            const face = font.faces.find(face => embeddingAllowed(face) && faceMatches(face, requirement));
+            if (face) return { font, face };
+        }
+        return undefined;
+    }
+    private match(requirement: FontRequirement): { font: LoadedFont; face: FontFaceInfo } | undefined {
+        const exact = this.exact(requirement);
+        if (exact) return exact;
+        const source = syntheticBoldSource(requirement);
+        return source ? this.exact(source) : undefined;
+    }
     missing(requirements: readonly FontRequirement[]): FontRequirement[] {
-        return requirements.filter(requirement => !this.fonts.some(font => font.faces.some(face => embeddingAllowed(face) && faceMatches(face, requirement))));
+        return requirements.filter(requirement => !this.match(requirement));
+    }
+    syntheticBold(requirements: readonly FontRequirement[]): FontRequirement[] {
+        return requirements.filter(requirement => !this.exact(requirement) && !!this.match(requirement));
     }
     async add(file: File): Promise<void> {
         if (file.size > MAX_FONT_BYTES) throw new Error(`${file.name}: Font exceeds 64 MiB.`);
@@ -215,16 +239,21 @@ export class FontRegistry {
     async resolve(requirements: readonly FontRequirement[]): Promise<string[]> {
         const errors: string[] = [];
         const attempted = new Set<string>();
-        for (const requirement of this.missing(requirements)) {
+        // Keep looking for a real bold face even when the regular face can be
+        // synthesized. Catalog order must never choose synthesis over an exact face.
+        for (const requirement of requirements.filter(requirement => !this.exact(requirement))) {
             // Full-name matching handles Arial Narrow catalogued under Arial without accepting an unrelated family.
             const family = normalizeFontFamily(requirement.family);
             const candidates = (this.catalog ?? []).filter(font => normalizeFontFamily(font.family) === family || normalizeFontFamily(font.fullName).startsWith(family + " "));
             for (const candidate of candidates) {
-                if (attempted.has(candidate.postscriptName)) continue;
+                if (attempted.has(candidate.postscriptName) || this.loadedLocalFonts.has(candidate.postscriptName)) continue;
                 attempted.add(candidate.postscriptName);
-                try { await this.add(new File([await candidate.blob()], candidate.postscriptName + ".ttf")); }
+                try {
+                    await this.add(new File([await candidate.blob()], candidate.postscriptName + ".ttf"));
+                    this.loadedLocalFonts.add(candidate.postscriptName);
+                }
                 catch (error) { errors.push(String(error)); }
-                if (!this.missing([requirement]).length) break;
+                if (this.exact(requirement)) break;
             }
         }
         return errors;
@@ -234,8 +263,7 @@ export class FontRegistry {
         if (missing.length) throw new Error(`Missing fonts: ${missing.map(fontLabel).join(", ")}`);
         const selected = new Set<LoadedFont>();
         for (const requirement of requirements) {
-            const font = this.fonts.find(font => font.faces.some(face => faceMatches(face, requirement)))!;
-            const face = font.faces.find(face => faceMatches(face, requirement))!;
+            const { font, face } = this.match(requirement)!;
             const absent = [...new Set([...requirement.text])].filter(char => !/\s/.test(char) && !hasGlyph(font, face, char.codePointAt(0)!));
             if (absent.length) throw new Error(`${fontLabel(requirement)} is missing glyphs: ${absent.slice(0, 8).join(" ")}. Select a font containing these characters.`);
             selected.add(font);

@@ -1,10 +1,10 @@
 import ConversionWorker from "./conversion_worker";
 import type { LoadedFont } from "./fonts";
-import type { SvgDocument } from "./svg";
+import type { FontRequirement, SvgDocument } from "./svg";
 import { prepareSvg } from "./effects";
 
-export async function convertSvg(document: SvgDocument, fonts: readonly LoadedFont[], signal: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
-    const prepared = await prepareSvg(document, signal);
+export async function convertSvg(document: SvgDocument, fonts: readonly LoadedFont[], signal: AbortSignal, syntheticBold: readonly FontRequirement[] = []): Promise<Uint8Array<ArrayBuffer>> {
+    const prepared = await prepareSvg(document, signal, syntheticBold);
     signal.throwIfAborted();
     if (prepared.shadows) console.info(`Rasterized ${prepared.shadows} Office shadows at 150 dpi; shapes remain vector.`);
     return new Promise((resolve, reject) => {

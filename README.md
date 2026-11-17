@@ -48,6 +48,10 @@ Once the fonts are loaded, PDF creation resumes and the guide closes when the PD
 is ready. Closing a permission prompt does not make it appear on every paste;
 use Add fonts… to retry.
 
+Cambria Math bold is generated automatically from its regular font when no bold
+face is available. The font guide shows Synthesized bold. Its appearance is
+adjusted to approximate Windows rendering; no extra font file is needed.
+
 While the preview says
 “SVG preview · PDF pending,” the PDF is not ready yet. Loaded figures and fonts are kept only
 until you close or reload the page; local fonts are loaded again automatically while access remains allowed. Manually selected font files and folders need to be selected again after a reload. Save history separately remembers names, previews and save destinations on this device.

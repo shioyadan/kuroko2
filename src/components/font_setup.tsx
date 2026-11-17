@@ -11,6 +11,7 @@ interface Props {
 export function FontSetup({ state, onAllow, onChooseFolder, onChooseFiles }: Props) {
     const required = state.document?.fonts ?? [];
     const missing = new Set(state.missingFonts.map(fontKey));
+    const synthesized = new Set(state.syntheticBoldFonts.map(fontKey));
     const needsPermission = state.fontAccess === "permission" || state.fontAccess === "unknown";
     const folderChoice = <>
         <p>Choose a folder containing the missing fonts. Matching files in its subfolders are loaded automatically.</p>
@@ -30,8 +31,9 @@ export function FontSetup({ state, onAllow, onChooseFolder, onChooseFiles }: Pro
                 <h3>Fonts for this figure</h3>
                 <ul className="font-list">{required.map(font => <li key={fontKey(font)}>
                     <span>{fontLabel(font)}</span>
-                    <span className={missing.has(fontKey(font)) ? "font-missing" : "font-ready"}>{state.busy ? "Checking…" : missing.has(fontKey(font)) ? "Missing" : "Ready"}</span>
+                    <span className={missing.has(fontKey(font)) ? "font-missing" : "font-ready"}>{state.busy ? "Checking…" : missing.has(fontKey(font)) ? "Missing" : synthesized.has(fontKey(font)) ? "Synthesized bold" : "Ready"}</span>
                 </li>)}</ul>
+                {synthesized.size > 0 && <p className="help-text">Cambria Math has no separate bold face. Its regular face is thickened to approximate Windows bold rendering.</p>}
                 {state.busy ? <p role="status">{state.status}</p> : missing.size > 0 ? <div className="font-setup-step">
                     {needsPermission ? <>
                         <p>Allow access to the fonts on this computer. kuroko 2 will find the fonts needed by your figure.</p>

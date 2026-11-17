@@ -1,4 +1,5 @@
-import { SVG_MIME, SVG_NS, type SvgDocument } from "./svg";
+import { SVG_MIME, SVG_NS, type FontRequirement, type SvgDocument } from "./svg";
+import { applySyntheticBold } from "./synthetic_bold";
 
 function isPowerPointShadow(filter: Element): boolean {
     const children = new Set([...filter.children].map(child => child.localName));
@@ -15,11 +16,12 @@ function ancestors(node: Element, root: Element): Element[] {
 
 // Rasterize only the Office shadow nodes. Each image stays at its original z-position.
 // The PoC put every shadow behind the figure; that changes overlapping objects.
-export async function prepareSvg(document: SvgDocument, signal: AbortSignal): Promise<{ svg: string; shadows: number }> {
+export async function prepareSvg(document: SvgDocument, signal: AbortSignal, syntheticBold: readonly FontRequirement[] = []): Promise<{ svg: string; shadows: number }> {
     const doc = new DOMParser().parseFromString(document.sanitized, SVG_MIME);
     const root = doc.documentElement;
     root.setAttribute("width", String(document.width * 72 / 96));
     root.setAttribute("height", String(document.height * 72 / 96));
+    applySyntheticBold(root, syntheticBold);
     const filters = [...root.querySelectorAll("filter")].filter(isPowerPointShadow);
     const ids = new Set(filters.map(filter => filter.id));
     const nodes = [...root.querySelectorAll("[filter]")].filter(node => ids.has(node.getAttribute("filter")?.match(/^url\(['"]?#([^)'"\s]+)['"]?\)$/)?.[1] ?? ""));

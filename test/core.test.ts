@@ -5,6 +5,8 @@ import { parseSvgLength, normalizeFontFamily } from "../src/core/svg";
 import { parseFont, embeddingAllowed, FontRegistry } from "../src/core/fonts";
 import { pdfFileName } from "../src/file_access";
 
+import { fontMetadataFixture } from "./font_fixture.cjs";
+
 test("physical SVG units convert to CSS px, invalid dimensions are rejected", () => {
     assert.equal(parseSvgLength("72pt"), 96);
     assert.equal(parseSvgLength("25.4mm"), 96);
@@ -55,6 +57,70 @@ test("real font metadata and glyph coverage, TTC faces and deduplication", async
     const v = new DataView(ttc.buffer); v.setUint32(0, 0x74746366); v.setUint32(4, 0x00010000); v.setUint32(8, 1); v.setUint32(12, 16);
     for (let i = 0; i < v.getUint16(20); i++) { const p = 16 + 12 + i * 16 + 8; v.setUint32(p, v.getUint32(p) + 16); }
     assert.equal(parseFont(ttc, "font.ttc").faces[0].family, "DejaVu Sans");
+});
+
+test("Cambria Math bold uses regular glyphs only when no exact bold face is available", async () => {
+    const registry = new FontRegistry();
+    const requirement = { family: "Cambria Math", weight: 700, style: "normal" as const, text: "₀₁₃" };
+    assert.deepEqual(registry.missing([requirement]), [requirement]);
+    assert.deepEqual(registry.syntheticBold([requirement]), []);
+    await registry.add(new File([fontMetadataFixture("Cambria Math")], "math-regular.ttf"));
+    assert.deepEqual(registry.missing([requirement]), []);
+    assert.deepEqual(registry.syntheticBold([requirement]), [requirement]);
+    assert.equal(registry.forConversion([requirement])[0].name, "math-regular.ttf");
+    assert.equal(registry.syntheticBold([{ ...requirement, family: "CAMBRIA MATH_MSFontService" }]).length, 1);
+    assert.deepEqual(registry.syntheticBold([{ ...requirement, weight: 400 }]), []);
+    assert.throws(() => registry.forConversion([{ ...requirement, text: "\u{10ffff}" }]), /missing glyphs/);
+    for (const weight of [500, 600, 800]) assert.equal(registry.missing([{ ...requirement, weight }]).length, 1);
+    assert.equal(registry.missing([{ ...requirement, style: "italic" }]).length, 1);
+    await registry.add(new File([fontMetadataFixture("Cambria")], "cambria-regular.ttf"));
+    assert.equal(registry.missing([{ ...requirement, family: "Cambria" }]).length, 1, "regular-face fallback must not spread to other families");
+    await registry.add(new File([fontMetadataFixture("Cambria Math", 700)], "math-bold.ttf"));
+    assert.deepEqual(registry.syntheticBold([requirement]), []);
+    assert.equal(registry.forConversion([requirement])[0].name, "math-bold.ttf", "an exact face wins even if loaded after regular");
+
+    const restricted = new FontRegistry();
+    await assert.rejects(restricted.add(new File([fontMetadataFixture("Cambria Math", 400, 2)], "restricted.ttf")), /Restricted/);
+    assert.deepEqual(restricted.missing([requirement]), [requirement]);
+});
+
+test("local font resolution searches past a synthetic fallback for a real bold face", async () => {
+    const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    const queryDescriptor = Object.getOwnPropertyDescriptor(globalThis, "queryLocalFonts");
+    const regular = fontMetadataFixture("Cambria Math"), bold = fontMetadataFixture("Cambria Math", 700);
+    const calls: string[] = [];
+    let includeBold = true;
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { permissions: { query: async () => ({ state: "granted" }) } } });
+    Object.defineProperty(globalThis, "queryLocalFonts", { configurable: true, value: async () => [
+        { family: "Cambria Math", fullName: "Cambria Math Regular", postscriptName: "MathRegular", style: "Regular", blob: async () => { calls.push("regular"); return new Blob([regular]); } },
+        { family: "Cambria Math", fullName: "Cambria Math Bold", postscriptName: "MathBold", style: "Bold", blob: async () => { calls.push("bold"); return new Blob([bold]); } }
+    ].slice(0, includeBold ? 2 : 1) });
+    try {
+        for (const preloadRegular of [false, true]) {
+            calls.length = 0;
+            const registry = new FontRegistry();
+            if (preloadRegular) await registry.add(new File([regular], "manually-selected-regular.ttf"));
+            await registry.ensureLocal();
+            const requirement = { family: "Cambria Math", weight: 700, style: "normal" as const, text: "₀₁₃" };
+            assert.deepEqual(await registry.resolve([requirement]), []);
+            assert.deepEqual(calls, ["regular", "bold"]);
+            assert.deepEqual(registry.syntheticBold([requirement]), []);
+            assert.equal(registry.forConversion([requirement])[0].name, "MathBold.ttf");
+        }
+        includeBold = false; calls.length = 0;
+        const registry = new FontRegistry();
+        await registry.ensureLocal();
+        const requirement = { family: "Cambria Math", weight: 700, style: "normal" as const, text: "₀₁₃" };
+        await registry.resolve([requirement]);
+        await registry.resolve([requirement]);
+        assert.deepEqual(registry.syntheticBold([requirement]), [requirement]);
+        assert.deepEqual(calls, ["regular"], "later pastes should reuse the already loaded regular face");
+    } finally {
+        if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+        else Reflect.deleteProperty(globalThis, "navigator");
+        if (queryDescriptor) Object.defineProperty(globalThis, "queryLocalFonts", queryDescriptor);
+        else Reflect.deleteProperty(globalThis, "queryLocalFonts");
+    }
 });
 
 test("font access prompts once per session, respects gestures and denial, and reuses a granted catalog", async () => {

@@ -86,6 +86,7 @@ toolbar and paste/save flow follow the original Kuroko.
 | `src/core/clipboard.ts` | Paste events, Async Clipboard API and UTF-8/UTF-16 decoding |
 | `src/core/svg.ts` | SVG validation/sanitization, dimensions and required fonts |
 | `src/core/fonts.ts` | SFNT/TTC metadata, embedding restrictions, deduplication and glyph coverage |
+| `src/core/synthetic_bold.ts` | Cambria Math bold synthesis in the derived SVG |
 | `src/core/effects.ts` | Rasterize Office shadows at 150 dpi while preserving z-order |
 | `src/core/conversion_worker.ts` | krilla-svg WASM conversion |
 | `src/core/pdf_preview_worker.ts` | Render the generated PDF with PDFium |
@@ -144,6 +145,23 @@ SVG dimensions use 96 CSS px per inch and PDF dimensions use 72 pt per inch.
 The source SVG remains unchanged for inspection/download. Sanitized and prepared
 versions are derived separately. Only allowed elements/attributes are retained;
 scripts, event handlers, external references and nested SVG image data are removed.
+
+Cambria Math 700 normal can use the same family's 400 normal face when no exact
+face is available. Exact faces take priority, and glyph coverage and embedding
+restrictions are checked against the selected face. Other families, weights and
+italic styles still require an exact match. Only the derived SVG receives synthetic
+bold spans: a same-color stroke of 1/35 em, with the original text positions and
+fill opacity preserved. It remains vector, selectable text. Mixed regular/bold
+spans are isolated; synthesis with an existing text outline is rejected.
+
+The stroke was checked against Windows 11 GDI `GetGlyphOutlineW` output for
+Cambria Math subscript digits, then matched to a PowerPoint reference PDF:
+0.33257 pt at 11.64 pt, miter joins, and miter limit 10. The reference embeds the
+regular face and applies fill-and-stroke without changing the glyph outlines.
+GDI's grid fitting and rounding in copied SVG sizes/positions can still differ.
+`test/synthetic_bold_smoke.cjs` uses renamed open-font test data to check
+the application flow, mixed spans, PDF text/vector output and exact-face priority.
+Microsoft fonts and local GDI reference outputs are not bundled in the repository.
 
 Inline styles and presentation attributes are supported. Stylesheets, relative
 font weights, `font-stretch`, text inside Office shadow nodes, variable font axes
