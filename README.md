@@ -20,7 +20,7 @@ A typical use is preparing figures for LaTeX papers and presentations.
 1. Open [kuroko 2](https://shioyadan.github.io/kuroko2/) in Chrome or Edge.
 2. Select and copy a figure in PowerPoint or Excel.
 3. Return to kuroko 2 and press Ctrl+V (⌘V on Mac), or click Paste Objects.
-4. If fonts are missing, load them as described below.
+4. If fonts are missing, check the substitute-font preview or load the originals as described below.
 5. Check the PDF preview, then click Save PDF or press Ctrl+S / ⌘S.
 
 The file name is editable just to the left of the menu. Fit to window and the preview zoom selector are also in the top toolbar.
@@ -37,16 +37,22 @@ The fonts needed by your figure are loaded automatically when you paste it. On
 first use, allow the browser to access your fonts if asked. Granted fonts are also
 loaded automatically after a page reload.
 
-The top right of the toolbar shows whether fonts are loading, missing or ready.
-If fonts are still needed, click Add fonts… there. Menu → Fonts opens the same guide.
+If original fonts are missing, kuroko 2 looks for substitute fonts on your
+computer, such as Arial or Times New Roman, and uses them to create the PDF. A red
+message below the toolbar lists the missing fonts. You can save this PDF, but
+letter shapes, spacing and layout may differ from the original. Click
+Add fonts… in the message to load the originals. Menu → Fonts opens the same guide.
 
 - If permission is needed, click Allow font access. If access is blocked or unavailable, the guide offers folder selection.
 - Click Choose font folder… to find the missing fonts in that folder and its subfolders. For Office fonts such as Aptos, select the `CloudFonts` folder under `%LOCALAPPDATA%\Microsoft\FontCache`. Other installed fonts are usually in `C:\Windows\Fonts`.
 - To select TTF, OTF, TTC or OTC files directly, expand Choose individual font files instead. If the guide is asking for permission, expand Add fonts from a folder or files instead first.
 
-Once the fonts are loaded, PDF creation resumes and the guide closes when the PDF
-is ready. Closing a permission prompt does not make it appear on every paste;
-use Add fonts… to retry.
+If no usable substitute can be loaded, allow local font access or select font
+files in the same guide. Fonts are not bundled with kuroko 2.
+
+Adding fonts automatically recreates the PDF. Once all original fonts are loaded
+and the PDF is ready, the warning disappears and the guide closes. Closing a
+permission prompt does not make it appear on every paste; use Add fonts… to retry.
 
 Cambria Math bold is generated automatically from its regular font when no bold
 face is available. The font guide shows Synthesized bold. Its appearance is
@@ -85,7 +91,7 @@ or know whether the download finished; the browser controls duplicate names.
 
 - Cannot paste: the copied content must include SVG. Check the selected objects and copy them again in PowerPoint. Clipboard content containing only EMF or PNG is not supported. You can also save the figure as SVG and open that file.
 - Permission prompts: clipboard and local font access require browser permission. If the offline app restricts these features, use the [web app](https://shioyadan.github.io/kuroko2/) or select SVG and font files directly.
-- Cannot save: missing fonts, missing characters or font embedding restrictions can prevent PDF creation. Check the message on screen and the Log pane. If writing to the selected file fails, use Download PDF instead in the error message to save a new copy through your browser.
+- Cannot save: missing fonts use substitutes, but characters unavailable in the selected fonts or their substitutes can still prevent PDF creation. Restricted fonts cannot be embedded. Check the message on screen and the Log pane. If writing to the selected file fails, use Download PDF instead in the error message to save a new copy through your browser.
 - No save dialog: some browsers download the PDF instead. Check your browser's download location.
 - Saving to WSL from Windows: Chrome's file access restrictions can reject WSL folders after you confirm the save dialog. Save to a Windows folder and copy the PDF into WSL, or try Download PDF instead. See the [Chromium report](https://issues.chromium.org/issues/553114097).
 - Some SVG effects and font settings are not supported. Check the preview before saving. Any whitespace included in the SVG is retained in the PDF.

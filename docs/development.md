@@ -117,8 +117,9 @@ the paste/open gesture is still active; a dismissed prompt is not repeated
 automatically during the session. Granted access needs no gesture. Concurrent
 queries share one enumeration, and cancelled conversions cannot start a prompt.
 The toolbar shows progress for clipboard reading, font loading, PDF creation and
-preview rendering, with a cancellation action beside it. When idle it shows the
-font state and, when needed, Add fonts…. Add fonts… and Menu → Fonts open the same setup guide:
+preview rendering, with a cancellation action beside it. Missing original fonts
+appear in a red notice below the toolbar, together with Add fonts…. The notice
+stays visible while a PDF using substitutes is available. Add fonts… and Menu → Fonts open the same setup guide:
 permission when needed, then folder selection for remaining fonts, with an
 individual-file fallback. File selection never triggers a new permission prompt.
 The catalog and selected folders are reused for the session; only the permission
@@ -149,7 +150,8 @@ scripts, event handlers, external references and nested SVG image data are remov
 Cambria Math 700 normal can use the same family's 400 normal face when no exact
 face is available. Exact faces take priority, and glyph coverage and embedding
 restrictions are checked against the selected face. Other families, weights and
-italic styles still require an exact match. Only the derived SVG receives synthetic
+italic styles use substitutes when an exact match is unavailable; they do not
+receive Cambria Math synthesis. Only the derived SVG receives synthetic
 bold spans: a same-color stroke of 1/35 em, with the original text positions and
 fill opacity preserved. It remains vector, selectable text. Mixed regular/bold
 spans are isolated; synthesis with an existing text outline is rejected.
@@ -163,10 +165,25 @@ GDI's grid fitting and rounding in copied SVG sizes/positions can still differ.
 the application flow, mixed spans, PDF text/vector output and exact-face priority.
 Microsoft fonts and local GDI reference outputs are not bundled in the repository.
 
+Missing original fonts do not prevent PDF creation when a usable substitute can
+be loaded from the computer. The Windows-oriented candidate order is fixed:
+Arial, Times New Roman, Yu Gothic, Meiryo, then MS Gothic. The first family with
+the needed characters is used, with the closest available style and weight in
+that family. Already-loaded fonts are the final backup candidates. Selection does
+not guess visual similarity or serif/sans-serif categories. Only candidate names
+are included in the code; font files are not bundled with kuroko 2 or fetched from
+a font server. Substitutes do not satisfy the original font requirement or hide the
+warning. If no suitable substitute is available, local font permission or manual
+font selection is still needed. Adding original fonts reconverts the figure; the
+setup guide closes only when all originals are available and conversion has
+finished. The source SVG retains its original font names. Changes to glyph widths
+and appearance are expected with substitutes and are explained in the notice.
+
 Inline styles and presentation attributes are supported. Stylesheets, relative
-font weights, `font-stretch`, text inside Office shadow nodes, variable font axes
-and implicit CJK fallback are outside the current scope. Missing fonts/glyphs and
-restricted, bitmap-only or no-subsetting fonts stop conversion. Limits include
+font weights, `font-stretch`, text inside Office shadow nodes and variable font
+axes are outside the current scope. Required glyphs unavailable in the selected
+fonts or substitutes still stop conversion instead of silently dropping text.
+Restricted, bitmap-only or no-subsetting fonts cannot be embedded. Limits include
 20 MiB input SVGs, 30,000 elements, font/rasterization budgets and 30-second worker
 timeouts. Non-Office filters are handled by krilla-svg.
 

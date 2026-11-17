@@ -15,6 +15,14 @@ export interface LoadedFont {
     readonly bytes: Uint8Array<ArrayBuffer>;
     readonly faces: readonly FontFaceInfo[];
 }
+export interface FontChoice { readonly font: LoadedFont; readonly face: FontFaceInfo; }
+export interface FontSubstitution {
+    readonly requirement: FontRequirement;
+    readonly glyphs: ReadonlyMap<string, FontChoice>;
+    readonly defaultFont: FontChoice;
+}
+// Windows-first, fixed order. Do not infer a replacement from a family's appearance.
+export const FALLBACK_FAMILIES = ["Arial", "Times New Roman", "Yu Gothic", "Meiryo", "MS Gothic"] as const;
 interface LocalFont {
     family: string;
     fullName: string;
@@ -257,6 +265,59 @@ export class FontRegistry {
             }
         }
         return errors;
+    }
+    private substitutionPlan(requirements: readonly FontRequirement[], families?: readonly string[]): { substitutions: FontSubstitution[]; absent: FontRequirement[] } {
+        const order = FALLBACK_FAMILIES.map(normalizeFontFamily);
+        const allowed = families?.map(normalizeFontFamily);
+        const familyIndex = (face: FontFaceInfo) => {
+            const index = order.findIndex(family => face.aliases.some(alias => normalizeFontFamily(alias) === family));
+            return index < 0 ? order.length : index;
+        };
+        const choices = this.fonts.flatMap(font => font.faces.filter(face => embeddingAllowed(face) &&
+            (!allowed || face.aliases.some(alias => allowed.includes(normalizeFontFamily(alias)))))
+            .map(face => ({ font, face })));
+        const substitutions: FontSubstitution[] = [], absent: FontRequirement[] = [];
+        for (const requirement of requirements) {
+            const sorted = [...choices].sort((a, b) => familyIndex(a.face) - familyIndex(b.face) ||
+                Number(a.face.style !== requirement.style) - Number(b.face.style !== requirement.style) ||
+                Math.abs(a.face.weight - requirement.weight) - Math.abs(b.face.weight - requirement.weight));
+            const glyphs = new Map<string, FontChoice>();
+            const missing: string[] = [];
+            for (const char of new Set(requirement.text)) {
+                if (/^[\t\n\r ]$/.test(char)) continue;
+                const match = sorted.find(({ font, face }) => hasGlyph(font, face, char.codePointAt(0)!));
+                if (match) glyphs.set(char, match);
+                else missing.push(char);
+            }
+            if (missing.length || !sorted.length) absent.push({ ...requirement, text: missing.join("") });
+            else substitutions.push({ requirement, glyphs, defaultFont: glyphs.values().next().value ?? sorted[0] });
+        }
+        return { substitutions, absent };
+    }
+    async resolveSubstitutions(requirements: readonly FontRequirement[]): Promise<readonly FontSubstitution[] | null> {
+        if (!requirements.length) return [];
+        // Load only the standard families needed to cover the missing text.
+        // Already selected font files are a final fallback when these are unavailable.
+        for (let index = 0; index < FALLBACK_FAMILIES.length; index++) {
+            const family = normalizeFontFamily(FALLBACK_FAMILIES[index]);
+            const candidates = (this.catalog ?? []).filter(font => normalizeFontFamily(font.family) === family || normalizeFontFamily(font.fullName).startsWith(family + " "));
+            for (const candidate of candidates) {
+                if (this.loadedLocalFonts.has(candidate.postscriptName)) continue;
+                try {
+                    await this.add(new File([await candidate.blob()], candidate.postscriptName + ".ttf"));
+                    this.loadedLocalFonts.add(candidate.postscriptName);
+                } catch (error) { console.warn(`Could not load substitute font: ${String(error)}`); }
+            }
+            const plan = this.substitutionPlan(requirements, FALLBACK_FAMILIES.slice(0, index + 1));
+            if (!plan.absent.length) return plan.substitutions;
+        }
+        if (!this.fonts.length) return null;
+        const plan = this.substitutionPlan(requirements);
+        if (plan.absent.length) {
+            const missing = plan.absent.map(font => `${fontLabel(font)}: ${[...font.text].slice(0, 8).join(" ")}`).join("; ");
+            throw new Error(`Substitute fonts are missing glyphs (${missing}). Allow font access or add a font containing these characters.`);
+        }
+        return plan.substitutions;
     }
     forConversion(requirements: readonly FontRequirement[]): readonly LoadedFont[] {
         const missing = this.missing(requirements);

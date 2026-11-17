@@ -24,7 +24,7 @@ export function FontSetup({ state, onAllow, onChooseFolder, onChooseFiles }: Pro
         </details>
     </>;
     return <>
-        <p>Fonts are loaded automatically when you paste a figure. Only fonts that could not be loaded need to be added here.</p>
+        <p>Fonts are loaded automatically when you paste a figure. You can add missing fonts here to restore their original appearance.</p>
         {!state.document ? <p>Paste a figure to see which fonts it needs.</p>
             : required.length === 0 ? <p>This figure does not need any text fonts.</p>
             : <>
@@ -35,6 +35,9 @@ export function FontSetup({ state, onAllow, onChooseFolder, onChooseFiles }: Pro
                 </li>)}</ul>
                 {synthesized.size > 0 && <p className="help-text">Cambria Math has no separate bold face. Its regular face is thickened to approximate Windows bold rendering.</p>}
                 {state.busy ? <p role="status">{state.status}</p> : missing.size > 0 ? <div className="font-setup-step">
+                    <p className="font-missing">{state.pdf
+                        ? "The PDF uses substitute fonts and may look different. Adding the missing fonts regenerates it with the original fonts."
+                        : "Allow font access or add fonts to create the PDF."}</p>
                     {needsPermission ? <>
                         <p>Allow access to the fonts on this computer. kuroko 2 will find the fonts needed by your figure.</p>
                         <button className="primary-button" disabled={state.saving} onClick={onAllow}>Allow font access</button>
@@ -42,7 +45,7 @@ export function FontSetup({ state, onAllow, onChooseFolder, onChooseFiles }: Pro
                     </> : <>
                         {state.fontAccess === "denied" && <p>Font access is blocked in your browser. You can allow it in the site settings or select the fonts below.</p>}
                         {state.fontAccess === "unsupported" && <p>This browser cannot load installed fonts automatically. Select the fonts below.</p>}
-                        {state.fontAccess === "failed" && <p>Automatic font loading did not succeed. Select the fonts below to continue.</p>}
+                        {state.fontAccess === "failed" && <p>Automatic font loading did not succeed. You can select the original fonts below.</p>}
                         {folderChoice}
                     </>}
                 </div> : <p>All fonts for this figure are ready.</p>}

@@ -2,10 +2,10 @@ const { readFileSync } = require("node:fs");
 
 // Reuse DejaVu's real glyphs without bundling proprietary Windows fonts. Only
 // font-family/style metadata changes; this tests font resolution, not fidelity.
-function fontMetadataFixture(family, weight = 400, embeddingFlags = 0) {
-    const source = Uint8Array.from(readFileSync(process.env.TEST_FONT_PATH || "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"));
-    const style = weight >= 700 ? "Bold" : "Regular";
-    const postscript = "Fixture-" + family.replace(/[^a-z0-9]/gi, "") + "-" + style;
+function fontMetadataFixture(family, weight = 400, embeddingFlags = 0, options = {}) {
+    const source = Uint8Array.from(readFileSync(options.sourcePath || process.env.TEST_FONT_PATH || "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"));
+    const style = options.italic ? (weight >= 700 ? "Bold Italic" : "Italic") : weight >= 700 ? "Bold" : "Regular";
+    const postscript = "Fixture-" + family.replace(/[^a-z0-9]/gi, "") + "-" + style.replace(/\s/g, "");
     const names = [[1, family], [2, style], [4, `${family} ${style}`], [6, postscript], [16, family], [17, style]];
     const strings = names.map(([, value]) => Uint8Array.from([...value].flatMap(char => [char.charCodeAt(0) >> 8, char.charCodeAt(0) & 255])));
     const stringsOffset = 6 + names.length * 12;
@@ -31,12 +31,12 @@ function fontMetadataFixture(family, weight = 400, embeddingFlags = 0) {
         if (tag === "name") { view.setUint32(record + 8, nameOffset); view.setUint32(record + 12, nameTable.length); }
         if (tag === "OS/2") {
             view.setUint16(offset + 4, weight); view.setUint16(offset + 8, embeddingFlags);
-            view.setUint16(offset + 62, weight >= 700 ? 0x20 : 0x40);
+            view.setUint16(offset + 62, (weight >= 700 ? 0x20 : options.italic ? 0 : 0x40) | (options.italic ? 1 : 0));
         }
         if (tag === "head") {
             headOffset = offset;
             view.setUint32(offset + 8, 0);
-            view.setUint16(offset + 44, weight >= 700 ? 1 : 0);
+            view.setUint16(offset + 44, (weight >= 700 ? 1 : 0) | (options.italic ? 2 : 0));
         }
     }
     const checksum = (offset, length) => {

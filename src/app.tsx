@@ -36,11 +36,11 @@ export function App({ store }: { store: Store }) {
     const logOpenRef = useRef(false);
     const logID = useRef(0);
     useEffect(() => {
-        if (dialog === "fonts" && closeFontsWhenReady.current && state.pdf && !state.busy) {
+        if (dialog === "fonts" && closeFontsWhenReady.current && state.pdf && !state.busy && !state.missingFonts.length) {
             closeFontsWhenReady.current = false;
             setDialog(null);
         }
-    }, [dialog, state.pdf, state.busy]);
+    }, [dialog, state.pdf, state.busy, state.missingFonts.length]);
     useEffect(() => {
         const observer = new ResizeObserver(entries => {
             const rect = entries[0].contentRect;
@@ -127,14 +127,12 @@ export function App({ store }: { store: Store }) {
                 </div>
             </div>
             <span className="toolbar-spacer" />
-            {(documentData || state.busy) && <div className={`toolbar-status ${missing.size && !state.busy ? "toolbar-status-needed" : ""}`}>
+            {(state.busy || (documentData && !missing.size)) && <div className="toolbar-status">
                 {state.busy ? <span className="spinner" aria-hidden="true" /> : <BsFonts aria-hidden="true" />}
-                <span className="toolbar-status-text" role="status" title={state.busy ? state.status : missing.size ? state.missingFonts.map(fontLabel).join(", ") : state.syntheticBoldFonts.map(font => `${fontLabel(font)} (synthesized)`).join(", ")}>{state.busy ? state.status
-                    : missing.size ? `Fonts needed (${missing.size})`
+                <span className="toolbar-status-text" role="status" title={state.busy ? state.status : state.syntheticBoldFonts.map(font => `${fontLabel(font)} (synthesized)`).join(", ")}>{state.busy ? state.status
                     : state.syntheticBoldFonts.length ? "Fonts ready · synthesized bold"
                     : documentData?.fonts.length ? "Fonts ready" : "No fonts needed"}</span>
-                {state.busy ? <button className="status-cancel" aria-label={state.fontLoading ? "Cancel font loading" : "Cancel"} title="Cancel" onClick={() => store.dispatch({ type: "CANCEL" })}><BsX aria-hidden="true" /></button>
-                    : missing.size > 0 && !state.busy && <button className="font-add" onClick={openFonts}>Add fonts…</button>}
+                {state.busy && <button className="status-cancel" aria-label={state.fontLoading ? "Cancel font loading" : "Cancel"} title="Cancel" onClick={() => store.dispatch({ type: "CANCEL" })}><BsX aria-hidden="true" /></button>}
             </div>}
             <div className="toolbar-file">
                 <input className="file-name-control" value={state.fileName} onChange={event => store.dispatch({ type: "SET_FILE_NAME", value: event.currentTarget.value })} aria-label="PDF file name" title="PDF file name" spellCheck={false} />
@@ -150,6 +148,13 @@ export function App({ store }: { store: Store }) {
         {(state.error || state.saveFailed) && <div className={`notice ${state.error ? "error" : "save-incomplete"}`} role={state.error ? "alert" : "status"}>
             {state.error || "No file was saved. If you confirmed the dialog, the browser may have blocked the destination. Try another folder or download the PDF instead."}
             {state.saveFailed && state.pdf && <button className="save-fallback" disabled={state.busy || state.saving} onClick={() => store.dispatch({ type: "DOWNLOAD_PDF" })}>Download PDF instead</button>}
+        </div>}
+        {documentData && missing.size > 0 && !state.fontLoading && <div className="notice font-warning" role="status">
+            <span>Missing fonts: {state.missingFonts.map(fontLabel).join(", ")}. {state.pdf
+                ? "The PDF uses substitute fonts and may look different. Add the missing fonts to restore the original appearance."
+                : state.busy ? "Looking for substitute fonts and preparing the PDF…"
+                : "Allow font access or add fonts to create the PDF."}</span>
+            <button className="font-add" disabled={state.busy || state.saving} onClick={openFonts}>Add fonts…</button>
         </div>}
         <main ref={previewArea} className={`preview-area ${dragging ? "dragging" : ""}`} aria-label="Figure preview" aria-busy={state.busy}>
             {!documentData ? <div className="empty-state">

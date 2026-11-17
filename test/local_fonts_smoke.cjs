@@ -21,6 +21,13 @@ async function paste(page, text) {
 async function ready(page) {
     await page.getByAltText("Generated PDF preview", { exact: true }).waitFor({ timeout: 60000 });
     await page.waitForFunction(() => document.querySelector("main").getAttribute("aria-busy") === "false");
+    const suggestion = page.getByRole("dialog", { name: "Save matching figure", exact: true });
+    if (await suggestion.count()) await suggestion.getByRole("button", { name: "Not now", exact: true }).click();
+}
+async function missing(page) {
+    await page.locator(".notice.font-warning").filter({ hasText: "Missing fonts:" }).waitFor();
+    await page.waitForFunction(() => document.querySelector("main").getAttribute("aria-busy") === "false");
+    assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false, "without access to any font, conversion waits for font access or a file");
 }
 (async () => {
     fs.mkdirSync(path.join(root, "work"), { recursive: true });
@@ -47,7 +54,7 @@ async function ready(page) {
         const url = `http://127.0.0.1:${server.address().port}/`;
         await page.goto(url);
         await paste(page, textFigure);
-        await page.getByText(/^Fonts needed \(/).waitFor();
+        await missing(page);
         assert.equal(await page.evaluate(() => window.localFontQueries), 0, "first use still requires permission");
 
         // Exercise Chromium's actual permission and installed font API, not a mock catalog.
@@ -59,7 +66,7 @@ async function ready(page) {
         await paste(page, textFigure);
         await ready(page);
         assert.equal(await page.evaluate(() => window.localFontQueries), 1);
-        assert.equal(await page.getByText(/^Fonts needed \(/).count(), 0);
+        assert.equal(await page.locator(".notice.font-warning").count(), 0);
         await paste(page, textFigure.replace("Hello Ω", "Hello again"));
         await ready(page);
         assert.equal(await page.evaluate(() => window.localFontQueries), 1, "later pastes reuse the local catalog");
@@ -84,7 +91,7 @@ async function ready(page) {
         await page.reload();
         await page.evaluate(() => { window.queryLocalFonts = async () => { throw new DOMException("Font access unavailable", "SecurityError"); }; });
         await paste(page, textFigure);
-        await page.getByText(/^Fonts needed \(/).waitFor();
+        await missing(page);
         assert.equal(await page.getByRole("alert").count(), 0);
         await page.getByRole("button", { name: "Add fonts…", exact: true }).click();
         const guide = page.getByRole("dialog", { name: "Fonts", exact: true });
@@ -156,10 +163,11 @@ async function ready(page) {
         await firstUse.reload();
         await firstUse.evaluate(() => { window.fontResponse = "dismiss"; });
         await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
-        await firstUse.getByText(/^Fonts needed \(/).waitFor();
-        assert.equal(await firstUse.locator(".toolbar-status button").count(), 1, "only one recovery action is offered");
+        await missing(firstUse);
+        assert.equal(await firstUse.locator(".notice.font-warning button").count(), 1, "one font recovery action appears in the notice");
+        assert.equal(await firstUse.locator(".toolbar-status .font-add").count(), 0, "font warnings are outside the toolbar");
         await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
-        await firstUse.getByText(/^Fonts needed \(/).waitFor();
+        await missing(firstUse);
         assert.equal(await firstUse.evaluate(() => window.fontQueries), 1, "dismissal does not nag on subsequent pastes");
         await firstUse.getByRole("button", { name: "Add fonts…", exact: true }).click();
         const setup = firstUse.getByRole("dialog", { name: "Fonts", exact: true });
@@ -174,7 +182,7 @@ async function ready(page) {
         await firstUse.reload();
         await firstUse.evaluate(() => { window.fontResponse = "deny"; });
         await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
-        await firstUse.getByText(/^Fonts needed \(/).waitFor();
+        await missing(firstUse);
         await firstUse.getByRole("button", { name: "Add fonts…", exact: true }).click();
         await setup.getByText(/Font access is blocked/).waitFor();
         assert.equal(await setup.getByRole("button", { name: "Allow font access", exact: true }).count(), 0);
@@ -189,7 +197,7 @@ async function ready(page) {
         await firstUse.reload();
         await firstUse.evaluate(() => { window.queryLocalFonts = undefined; });
         await firstUse.getByRole("button", { name: /^Paste Objects/ }).click();
-        await firstUse.getByText(/^Fonts needed \(/).waitFor();
+        await missing(firstUse);
         await firstUse.screenshot({ path: path.join(root, "work/font-status-needed.png") });
         await firstUse.setViewportSize({ width: 390, height: 700 });
         await firstUse.screenshot({ path: path.join(root, "work/font-status-mobile.png") });

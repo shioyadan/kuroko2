@@ -3,9 +3,10 @@
  */
 import { blobToText, readClipboard, readPaste, type ClipboardSvg } from "./core/clipboard";
 import { convertSvg } from "./core/convert";
-import { FontRegistry, parseFont, type FontPromptMode, type LocalFontAccess } from "./core/fonts";
+import { FALLBACK_FAMILIES, FontRegistry, parseFont, type FontPromptMode, type LocalFontAccess } from "./core/fonts";
 import { renderPdf } from "./core/pdf_preview";
-import { fontLabel, normalizeFontFamily, parseSvg, type FontRequirement, type SvgDocument } from "./core/svg";
+import { fontKey, fontLabel, normalizeFontFamily, parseSvg, type FontRequirement, type SvgDocument } from "./core/svg";
+import { substituteFonts } from "./core/font_substitution";
 import { downloadBlob, pdfFileName, savePdf, type SaveHandle, type SaveResult } from "./file_access";
 import { describeFigure, matchingFigures, type FigureMemory } from "./core/figure_match";
 import { loadSaveHistory, putSavedFigure, removeSavedFigures, saveHistoryId, MAX_SAVE_HISTORY, type SavedFigure } from "./save_history";
@@ -264,7 +265,9 @@ export class Store {
             if (!/\.(ttf|otf|ttc|otc)$/i.test(file.name) || file.size > 64 * 1024 * 1024) continue;
             try {
                 const parsed = parseFont(new Uint8Array(await file.arrayBuffer()), file.name);
-                if (parsed.faces.some(face => face.aliases.some(alias => required.some(font => normalizeFontFamily(alias) === normalizeFontFamily(font.family))))) {
+                if (parsed.faces.some(face => face.aliases.some(alias =>
+                    required.some(font => normalizeFontFamily(alias) === normalizeFontFamily(font.family)) ||
+                    FALLBACK_FAMILIES.some(family => normalizeFontFamily(alias) === normalizeFontFamily(family))))) {
                     await this.fonts.add(file);
                 }
             } catch (error) { console.warn(message(error)); }
@@ -299,13 +302,25 @@ export class Store {
             this.publish({ missingFonts, syntheticBoldFonts, fontLoading: false, loadedFonts: this.fonts.labels(), pdf: null, preview: null });
             if (missingFonts.length) {
                 console.warn(`Missing fonts: ${missingFonts.map(fontLabel).join(", ")}`);
-                this.publish({ busy: false, status: "Choose Add fonts… to complete the PDF." });
+            }
+            const substitutions = await this.fonts.resolveSubstitutions(missingFonts);
+            if (id !== this.requestId) return;
+            this.publish({ loadedFonts: this.fonts.labels() });
+            if (!substitutions) {
+                this.publish({ busy: false, status: "Allow font access or add fonts to create the PDF." });
                 return;
+            }
+            const substituted = substituteFonts(document, substitutions);
+            const missingKeys = new Set(missingFonts.map(fontKey));
+            const fonts = [...new Set([...this.fonts.forConversion(document.fonts.filter(font => !missingKeys.has(fontKey(font)))), ...substituted.fonts])];
+            for (const substitution of substitutions) {
+                const names = [...new Set([...substitution.glyphs.values()].map(choice => fontLabel(choice.face)))];
+                console.warn(`Substitute fonts: ${fontLabel(substitution.requirement)} → ${names.join(", ")}. Text appearance may differ.`);
             }
             this.publish({ status: "Creating PDF…" });
             const signal = this.controller!.signal;
             if (syntheticBoldFonts.length) console.info(`Using synthesized bold: ${syntheticBoldFonts.map(fontLabel).join(", ")}`);
-            const bytes = await convertSvg(document, this.fonts.forConversion(document.fonts), signal, syntheticBoldFonts);
+            const bytes = await convertSvg(substituted.document, fonts, signal, syntheticBoldFonts);
             if (id !== this.requestId) return;
             this.publish({ status: "Rendering PDF preview…" });
             const preview = await renderPdf(bytes, signal);

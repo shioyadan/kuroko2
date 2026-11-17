@@ -108,7 +108,9 @@ const fontFile = (name, family, weight = 400) => ({ name, mimeType: "font/ttf", 
         const fonts = page.getByRole("dialog", { name: "Fonts", exact: true });
         const bold = figure(700);
         await paste(page, bold);
-        await toolbar.getByText(/^Fonts needed \(/).waitFor();
+        await page.locator(".notice.font-warning").filter({ hasText: "Missing fonts:" }).waitFor();
+        await page.waitForFunction(() => document.querySelector("main").getAttribute("aria-busy") === "false");
+        assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false, "no font is bundled or available yet");
         await page.getByLabel("Select font files", { exact: true }).setInputFiles(fontFile("math-regular.ttf", "Cambria Math"));
         await ready(page);
         await toolbar.getByText("Fonts ready · synthesized bold", { exact: true }).waitFor();
@@ -157,12 +159,20 @@ const fontFile = (name, family, weight = 400) => ({ name, mimeType: "font/ttf", 
         assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false, "an existing text outline must not be silently replaced");
 
         await paste(page, bold.replace('font-weight="700"', 'font-weight="700" font-style="italic"'));
-        await toolbar.getByText(/^Fonts needed \(/).waitFor();
-        assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false, "unverified italic synthesis is not substituted");
+        await ready(page);
+        await page.locator(".notice.font-warning").filter({ hasText: "Missing fonts:" }).waitFor();
+        assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), true, "unavailable italic uses a substitute");
+        const italicPdf = await inspectPdf(await save(page, "synthetic-bold-italic-substitute.pdf"));
+        assert.equal(italicPdf.text, "P₀/H₀₁₃");
+        assert.ok(italicPdf.painted.every(item => (item.mode & 3) === 0), "substitution must not apply Cambria's synthetic stroke");
         await page.getByLabel("Select font files", { exact: true }).setInputFiles(fontFile("other-regular.ttf", "Other Family"));
         await paste(page, bold.replace("Cambria Math", "Other Family"));
-        await toolbar.getByText(/^Fonts needed \(/).waitFor();
-        assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false, "other regular families do not gain bold fallback");
+        await ready(page);
+        await page.locator(".notice.font-warning").filter({ hasText: "Missing fonts:" }).waitFor();
+        assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), true, "other families can use a substitute bold face");
+        const otherPdf = await inspectPdf(await save(page, "synthetic-bold-other-substitute.pdf"));
+        assert.equal(otherPdf.text, "P₀/H₀₁₃");
+        assert.ok(otherPdf.painted.every(item => (item.mode & 3) === 0), "other regular families do not gain Cambria's synthetic stroke");
 
         // This metadata-only bold fixture intentionally retains regular outlines:
         // it isolates exact-face preference from any change in the test glyphs.
@@ -176,6 +186,6 @@ const fontFile = (name, family, weight = 400) => ({ name, mimeType: "font/ttf", 
         assert.ok(exactPdf.painted.every(item => (item.mode & 3) === 0), "an exact bold face removes synthetic strokes");
         assert.deepEqual(external, [], "font synthesis requires no external resources");
         assert.deepEqual(errors, [], "no uncaught browser errors");
-        console.log("Synthetic bold smoke passed: regular-face fallback, UI, original source, selectable vector text, visible bold, mixed-span inheritance, existing-outline rejection, strict missing fonts and exact-face preference.");
+        console.log("Synthetic bold smoke passed: regular-face fallback, UI, original source, selectable vector text, visible bold, mixed-span inheritance, existing-outline rejection, visible missing-font substitutions and exact-face preference.");
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

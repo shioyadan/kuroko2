@@ -218,8 +218,9 @@ async function save(page, fileName) {
 
         const textFigure = svg('<rect width="192" height="96" fill="white"/><text x="12" y="52" font-family="DejaVu Sans" font-size="24">Hello Ω</text>');
         await paste(page, textFigure);
-        await page.getByText(/^Fonts needed \(/).waitFor();
-        assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false);
+        await page.locator(".notice.font-warning").filter({ hasText: "Missing fonts:" }).waitFor();
+        await page.waitForFunction(() => document.querySelector("main").getAttribute("aria-busy") === "false");
+        assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false, "font files are not bundled; one must be made available");
         await page.getByLabel("Select font files", { exact: true }).setInputFiles(process.env.TEST_FONT_PATH || "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
         await ready(page);
         const textPdf = await save(page, "text.pdf");
@@ -230,10 +231,11 @@ async function save(page, fileName) {
         assert.equal(text.items.map(item => item.str || "").join("").replace(/\s/g, ""), "HelloΩ");
         await document.destroy();
 
-        // Local font names must not silently accept the wrong family or missing glyphs.
+        // Missing families stay visible even with substitutes; missing glyphs cannot be silently dropped.
         await paste(page, textFigure.replace("DejaVu Sans", "DejaVu Sans Missing"));
-        await page.getByText(/^Fonts needed \(/).waitFor();
-        assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), false);
+        await ready(page);
+        await page.locator(".notice.font-warning").filter({ hasText: "Missing fonts:" }).waitFor();
+        assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), true);
         await paste(page, textFigure.replace("Hello Ω", "&#x10ffff;"));
         await page.getByRole("alert").filter({ hasText: "missing glyphs" }).waitFor();
 
