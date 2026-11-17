@@ -4,7 +4,7 @@ import { fontKey, inherited, SVG_NS, textFont, type FontRequirement } from "./sv
 // 0.33257 pt at 11.64 pt, i.e. 1/35 em, miter joins and miter limit 10.
 // This also approximates Windows GDI synthesis while keeping selectable text.
 // GDI grid fitting and rounding in the copied SVG can still affect the result.
-export const CAMBRIA_MATH_BOLD_STROKE_EM = 1 / 35;
+const CAMBRIA_MATH_BOLD_STROKE_EM = 1 / 35;
 
 export function applySyntheticBold(root: Element, requirements: readonly FontRequirement[]): void {
     if (!requirements.length) return;
@@ -22,7 +22,6 @@ export function applySyntheticBold(root: Element, requirements: readonly FontReq
         stroke: inherited(node, "stroke", "none")
     }));
     for (const { node, texts, fill, fillOpacity, stroke } of runs) {
-        if (!texts.length) continue;
         if (stroke !== "none") throw new Error("Synthesized Cambria Math bold with an existing text outline is not supported. Use a regular weight or convert that text to paths in the source figure.");
         for (const text of texts) {
             const span = root.ownerDocument.createElementNS(SVG_NS, "tspan");

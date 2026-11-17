@@ -3,7 +3,7 @@
  */
 import { blobToText, readClipboard, readPaste, type ClipboardSvg } from "./core/clipboard";
 import { convertSvg } from "./core/convert";
-import { FALLBACK_FAMILIES, FontRegistry, parseFont, type FontPromptMode, type LocalFontAccess } from "./core/fonts";
+import { FALLBACK_FAMILIES, FontRegistry, MAX_FONT_BYTES, parseFont, type FontPromptMode, type LocalFontAccess } from "./core/fonts";
 import { renderPdf } from "./core/pdf_preview";
 import { fontKey, fontLabel, normalizeFontFamily, parseSvg, type FontRequirement, type SvgDocument } from "./core/svg";
 import { substituteFonts } from "./core/font_substitution";
@@ -270,7 +270,7 @@ export class Store {
         for (const file of this.fontFolderFiles) {
             if (id !== this.requestId) return;
             if (!this.fonts.missing(required).length) break;
-            if (!/\.(ttf|otf|ttc|otc)$/i.test(file.name) || file.size > 64 * 1024 * 1024) continue;
+            if (!/\.(ttf|otf|ttc|otc)$/i.test(file.name) || file.size > MAX_FONT_BYTES) continue;
             try {
                 const parsed = parseFont(new Uint8Array(await file.arrayBuffer()), file.name);
                 if (parsed.faces.some(face => face.aliases.some(alias =>

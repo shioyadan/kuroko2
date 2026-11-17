@@ -33,7 +33,7 @@ test("malformed fonts fail before reaching WASM", () => {
     assert.throws(() => parseFont(collection, "bad.ttc"), /collection/);
 });
 test("restricted and no-subsetting fonts cannot be used", () => {
-    const face = { family: "Test", aliases: ["Test"], weight: 400, style: "normal" as const, faceIndex: 0, cmap: undefined, embeddingFlags: 0 };
+    const face = { family: "Test", aliases: ["Test"], weight: 400, style: "normal" as const, cmap: undefined, embeddingFlags: 0 };
     assert.equal(embeddingAllowed(face), true);
     for (const flags of [2, 0x100, 0x200]) assert.equal(embeddingAllowed({ ...face, embeddingFlags: flags }), false);
     assert.equal(embeddingAllowed({ ...face, embeddingFlags: 4 }), true);

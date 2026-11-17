@@ -1,4 +1,4 @@
-import { fontKey, fontLabel, normalizeFontFamily, type FontRequirement } from "./svg";
+import { fontLabel, normalizeFontFamily, type FontRequirement } from "./svg";
 
 interface Table { offset: number; length: number; }
 export interface FontFaceInfo {
@@ -7,7 +7,6 @@ export interface FontFaceInfo {
     readonly weight: number;
     readonly style: "normal" | "italic";
     readonly embeddingFlags: number;
-    readonly faceIndex: number;
     readonly cmap: Table | undefined;
 }
 export interface LoadedFont {
@@ -27,10 +26,9 @@ interface LocalFont {
     family: string;
     fullName: string;
     postscriptName: string;
-    style: string;
     blob(): Promise<Blob>;
 }
-const MAX_FONT_BYTES = 64 * 1024 * 1024;
+export const MAX_FONT_BYTES = 64 * 1024 * 1024;
 export type LocalFontAccess = "unknown" | "ready" | "permission" | "denied" | "unsupported" | "failed";
 export type FontPromptMode = "automatic" | "explicit" | "never";
 
@@ -53,7 +51,7 @@ export function parseFont(bytes: Uint8Array<ArrayBuffer>, name: string): LoadedF
         requireRange(12, count * 4);
         offsets = Array.from({ length: count }, (_, i) => view.getUint32(12 + i * 4));
     }
-    const faces = offsets.map((offset, faceIndex): FontFaceInfo => {
+    const faces = offsets.map((offset): FontFaceInfo => {
         requireRange(offset, 12);
         if (![0x00010000, 0x4f54544f, 0x74727565].includes(view.getUint32(offset))) throw new Error(`${name}: Select a TTF, OTF or TTC font.`);
         const count = view.getUint16(offset + 4);
@@ -101,7 +99,7 @@ export function parseFont(bytes: Uint8Array<ArrayBuffer>, name: string): LoadedF
         const embeddingFlags = view.getUint16(os2.offset + 8);
         const weight = view.getUint16(os2.offset + 4);
         const italic = /italic|oblique/i.test(subfamily) || (os2.length >= 64 && !!(view.getUint16(os2.offset + 62) & 1));
-        return { family, aliases: [...aliases], weight, style: italic ? "italic" : "normal", embeddingFlags, faceIndex, cmap: tables.get("cmap") };
+        return { family, aliases: [...aliases], weight, style: italic ? "italic" : "normal", embeddingFlags, cmap: tables.get("cmap") };
     });
     return { name, bytes, faces };
 }
@@ -175,14 +173,14 @@ export class FontRegistry {
     private totalBytes = 0;
     get loaded(): readonly LoadedFont[] { return this.fonts; }
     get hasCatalog(): boolean { return this.catalog !== null; }
-    private exact(requirement: FontRequirement): { font: LoadedFont; face: FontFaceInfo } | undefined {
+    private exact(requirement: FontRequirement): FontChoice | undefined {
         for (const font of this.fonts) {
             const face = font.faces.find(face => embeddingAllowed(face) && faceMatches(face, requirement));
             if (face) return { font, face };
         }
         return undefined;
     }
-    private match(requirement: FontRequirement): { font: LoadedFont; face: FontFaceInfo } | undefined {
+    private match(requirement: FontRequirement): FontChoice | undefined {
         const exact = this.exact(requirement);
         if (exact) return exact;
         const source = syntheticBoldSource(requirement);
@@ -244,22 +242,26 @@ export class FontRegistry {
             return permission === "denied" ? "denied" : permission === "prompt" ? "permission" : "failed";
         }
     }
+    private localCandidates(family: string): readonly LocalFont[] {
+        const normalized = normalizeFontFamily(family);
+        // Full-name matching handles Arial Narrow catalogued under Arial without accepting an unrelated family.
+        return (this.catalog ?? []).filter(font => normalizeFontFamily(font.family) === normalized || normalizeFontFamily(font.fullName).startsWith(normalized + " "));
+    }
+    private async loadLocal(candidate: LocalFont): Promise<void> {
+        if (this.loadedLocalFonts.has(candidate.postscriptName)) return;
+        await this.add(new File([await candidate.blob()], candidate.postscriptName + ".ttf"));
+        this.loadedLocalFonts.add(candidate.postscriptName);
+    }
     async resolve(requirements: readonly FontRequirement[]): Promise<string[]> {
         const errors: string[] = [];
         const attempted = new Set<string>();
         // Keep looking for a real bold face even when the regular face can be
         // synthesized. Catalog order must never choose synthesis over an exact face.
         for (const requirement of requirements.filter(requirement => !this.exact(requirement))) {
-            // Full-name matching handles Arial Narrow catalogued under Arial without accepting an unrelated family.
-            const family = normalizeFontFamily(requirement.family);
-            const candidates = (this.catalog ?? []).filter(font => normalizeFontFamily(font.family) === family || normalizeFontFamily(font.fullName).startsWith(family + " "));
-            for (const candidate of candidates) {
-                if (attempted.has(candidate.postscriptName) || this.loadedLocalFonts.has(candidate.postscriptName)) continue;
+            for (const candidate of this.localCandidates(requirement.family)) {
+                if (attempted.has(candidate.postscriptName)) continue;
                 attempted.add(candidate.postscriptName);
-                try {
-                    await this.add(new File([await candidate.blob()], candidate.postscriptName + ".ttf"));
-                    this.loadedLocalFonts.add(candidate.postscriptName);
-                }
+                try { await this.loadLocal(candidate); }
                 catch (error) { errors.push(String(error)); }
                 if (this.exact(requirement)) break;
             }
@@ -299,14 +301,9 @@ export class FontRegistry {
         // Load only the standard families needed to cover the missing text.
         // Already selected font files are a final fallback when these are unavailable.
         for (let index = 0; index < FALLBACK_FAMILIES.length; index++) {
-            const family = normalizeFontFamily(FALLBACK_FAMILIES[index]);
-            const candidates = (this.catalog ?? []).filter(font => normalizeFontFamily(font.family) === family || normalizeFontFamily(font.fullName).startsWith(family + " "));
-            for (const candidate of candidates) {
-                if (this.loadedLocalFonts.has(candidate.postscriptName)) continue;
-                try {
-                    await this.add(new File([await candidate.blob()], candidate.postscriptName + ".ttf"));
-                    this.loadedLocalFonts.add(candidate.postscriptName);
-                } catch (error) { console.warn(`Could not load substitute font: ${String(error)}`); }
+            for (const candidate of this.localCandidates(FALLBACK_FAMILIES[index])) {
+                try { await this.loadLocal(candidate); }
+                catch (error) { console.warn(`Could not load substitute font: ${String(error)}`); }
             }
             const plan = this.substitutionPlan(requirements, FALLBACK_FAMILIES.slice(0, index + 1));
             if (!plan.absent.length) return plan.substitutions;

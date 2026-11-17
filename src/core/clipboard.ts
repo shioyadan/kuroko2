@@ -38,12 +38,16 @@ export function readPaste(data: DataTransfer): Promise<ClipboardSvg> {
     if (direct) return Promise.resolve({ text: direct.text, source: direct.type, types });
     const files = [...data.files].filter(file => file.type === SVG_MIME || /\.svg$/i.test(file.name));
     const items = [...data.items].filter(item => item.type === SVG_MIME);
-    const pending = items.map(item => item.kind === "file"
-        ? (item.getAsFile() ? blobToText(item.getAsFile()!) : Promise.resolve(""))
-        : new Promise<string>(resolve => {
+    const pending = items.map(item => {
+        if (item.kind === "file") {
+            const file = item.getAsFile();
+            return file ? blobToText(file) : Promise.resolve("");
+        }
+        return new Promise<string>(resolve => {
             const timeout = setTimeout(() => resolve(""), 200);
             item.getAsString(text => { clearTimeout(timeout); resolve(text); });
-        }));
+        });
+    });
     // Chromium may advertise image/svg+xml but return empty event data. Start while user activation is live.
     const fallback = types.includes(SVG_MIME) ? readClipboard().then(value => ({ value }), error => ({ error })) : null;
     return (async () => {
