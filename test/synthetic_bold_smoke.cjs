@@ -3,36 +3,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { chromium } = require("playwright-core");
+const { root, work, paste, ready, save } = require("./pdf_smoke_helpers.cjs");
 const { fontMetadataFixture } = require("./font_fixture.cjs");
 
-const root = path.resolve(__dirname, "..");
-const work = path.join(root, "work");
 const svg = body => `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="110"><rect width="400" height="110" fill="white"/>${body}</svg>`;
 const figure = weight => svg(`<text x="20" y="72" font-family="Cambria Math" font-weight="${weight}" font-size="48" fill="#172b3a">P₀/H₀ ₁₃</text>`);
-async function paste(page, text) {
-    await page.evaluate(text => {
-        const clipboardData = new DataTransfer(); clipboardData.setData("image/svg+xml", text);
-        window.dispatchEvent(new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }));
-    }, text);
-}
-async function ready(page) {
-    await page.waitForFunction(() => document.querySelector("main")?.getAttribute("aria-busy") === "false", undefined, { timeout: 60000 });
-    if (await page.getByRole("alert").count()) throw new Error(await page.getByRole("alert").innerText());
-    await page.getByAltText("Generated PDF preview", { exact: true }).waitFor({ timeout: 60000 });
-    const suggestion = page.getByRole("dialog", { name: "Save matching figure", exact: true });
-    if (await suggestion.count()) await suggestion.getByRole("button", { name: "Not now", exact: true }).click();
-    assert.equal(await page.getByRole("button", { name: /^Save PDF/ }).isEnabled(), true);
-}
-async function save(page, name) {
-    await page.getByLabel("PDF file name", { exact: true }).fill(name);
-    const pending = page.waitForEvent("download");
-    await page.getByRole("button", { name: /^Save PDF/ }).click();
-    const download = await pending;
-    assert.equal(await download.failure(), null);
-    await download.saveAs(path.join(work, name));
-    await page.getByText(`Download started: ${name}`, { exact: true }).waitFor();
-    return fs.readFileSync(path.join(work, name));
-}
 async function inspectPdf(bytes) {
     assert.doesNotMatch(bytes.toString("latin1"), /\/Subtype\s*\/Image/, "synthetic text must stay vector");
     assert.match(bytes.toString("latin1"), /\/FontFile2/, "the regular font remains embedded");
