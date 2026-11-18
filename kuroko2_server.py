@@ -162,7 +162,9 @@ class OverleafBridge:
             self._active = operation
             self._cancelled.clear()
         try:
-            with self._lock_cache(self._repo.parent) if repository and self._repo is not None else nullcontext():
+            if repository and self._repo is None:
+                raise BridgeError("Connect to an Overleaf project first.", "not_connected", 409)
+            with self._lock_cache(self._repo.parent) if repository else nullcontext():
                 yield
         except GitFailure as error:
             self._raise_git_error(error)
@@ -307,10 +309,6 @@ class OverleafBridge:
             raise GitFailure(stderr)
         return stdout
 
-    def _require_connection(self):
-        if self._repo is None:
-            raise BridgeError("Connect to an Overleaf project first.", "not_connected", 409)
-
     def _inspect(self, repo, branch):
         head = self._git("rev-parse", "--verify", branch + "^{commit}", repo=repo).decode().strip()
         listing = self._git("ls-tree", "-r", "-t", "-l", "-z", head, repo=repo)
@@ -402,7 +400,6 @@ class OverleafBridge:
 
     def refresh(self, operation=None):
         with self._operation(operation, repository=True):
-            self._require_connection()
             self._fetch()
             return self.snapshot()
 
@@ -414,7 +411,6 @@ class OverleafBridge:
     def read_pdf(self, path, oid, operation=None):
         self.validate_path(path)
         with self._operation(operation, repository=True):
-            self._require_connection()
             file = next((file for file in self._files if file["path"] == path), None)
             if not file or file["oid"] != oid:
                 raise BridgeError("This PDF has changed. Refresh the project and select it again.", "conflict", 409)
@@ -468,7 +464,6 @@ class OverleafBridge:
         if not data.startswith(b"%PDF-"):
             raise BridgeError("Only PDF files can be uploaded.", "invalid_pdf")
         with self._operation(operation, repository=True):
-            self._require_connection()
             if expected_project is not None and expected_project != self._url:
                 raise BridgeError(
                     "The connected project changed in another tab. Reconnect to the intended project before uploading.",

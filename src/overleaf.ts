@@ -28,9 +28,9 @@ export interface OverleafSnapshot {
     readonly status: string;
     readonly error: string;
     readonly remote: { path: string; oid: string; bytes: Uint8Array<ArrayBuffer>; preview: string } | null;
-    readonly confirmation: { path: string; expected: string; preview: string | null } | null;
+    readonly confirmation: (Upload & { readonly expected: string }) | null;
 }
-type Upload = { path: string; pdf: Uint8Array<ArrayBuffer>; preview: string | null; memory: FigureMemory | null };
+type Upload = { readonly path: string; readonly pdf: Uint8Array<ArrayBuffer>; readonly preview: string | null; readonly memory: FigureMemory | null };
 type Action =
     | { type: "PROBE" | "INIT" | "REFRESH" | "DISCONNECT" | "DOWNLOAD" | "CONFIRM_UPLOAD" | "DISMISS_CONFIRM" | "CANCEL" }
     | { type: "CONNECT"; url: string }
@@ -53,7 +53,6 @@ export class OverleafStore {
     };
     private session = "";
     private operation: { id: string; controller: AbortController; rendering: boolean } | null = null;
-    private pendingUpload: Upload | null = null;
     private figure: FigureMemory | null = null;
     private history: readonly OverleafSavedFigure[] = [];
     private historyReady: Promise<void> | null = null;
@@ -268,23 +267,20 @@ export class OverleafStore {
                 const upload = { path, pdf: action.pdf, preview: action.preview, memory: this.figure };
                 const previous = this.state.files.find(file => file.path === path);
                 if (previous) {
-                    this.pendingUpload = upload;
-                    this.publish({ confirmation: { path, expected: previous.oid, preview: action.preview }, error: "" });
+                    this.publish({ confirmation: { ...upload, expected: previous.oid }, error: "" });
                     if (this.state.remote?.oid !== previous.oid || this.state.remote.path !== path) this.dispatch({ type: "SELECT", path });
                 } else this.upload(upload, "");
                 break;
             }
             case "CONFIRM_UPLOAD": {
-                const upload = this.pendingUpload;
                 const confirmation = this.state.confirmation;
-                if (upload && confirmation) this.upload(upload, confirmation.expected);
+                if (confirmation) this.upload(confirmation, confirmation.expected);
                 break;
             }
         }
     }
     private clearConfirmation(): void {
-        this.pendingUpload = null;
-        this.publish({ confirmation: null });
+        if (this.state.confirmation) this.publish({ confirmation: null });
     }
     private upload(upload: Upload, expected: string): void {
         const projectUrl = this.state.url;
