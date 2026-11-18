@@ -1,4 +1,4 @@
-import { MAX_THUMBNAIL_LENGTH, validFingerprint, type FigureMemory } from "./core/figure_match";
+import { validFigureMemory, type FigureMemory } from "./core/figure_match";
 import type { SaveHandle } from "./file_access";
 import { HistoryDatabase } from "./history_database";
 
@@ -20,8 +20,7 @@ export function validSavedFigure(value: unknown): value is SavedFigure {
     if (!value || typeof value !== "object") return false;
     const r = value as Partial<SavedFigure>;
     return typeof r.id === "string" && typeof r.name === "string" && r.name.length > 0 && r.name.length <= 1024 &&
-        typeof r.savedAt === "number" && Number.isFinite(r.savedAt) && validFingerprint(r.fingerprint) &&
-        typeof r.thumbnail === "string" && r.thumbnail.length < MAX_THUMBNAIL_LENGTH && /^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(r.thumbnail) &&
+        typeof r.savedAt === "number" && Number.isFinite(r.savedAt) && validFigureMemory(r) &&
         (!r.handle || (typeof r.handle === "object" && typeof r.handle.createWritable === "function"));
 }
 export async function loadSaveHistory(): Promise<SavedFigure[]> {

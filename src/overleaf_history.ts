@@ -1,4 +1,4 @@
-import { matchingFigures, MAX_THUMBNAIL_LENGTH, validFingerprint, type FigureMemory } from "./core/figure_match";
+import { matchingFigures, validFigureMemory, validFingerprint, type FigureMemory } from "./core/figure_match";
 import { HistoryDatabase } from "./history_database";
 
 export const MAX_RECENT_PROJECTS = 10;
@@ -69,8 +69,7 @@ export function validOverleafSavedFigure(value: unknown): value is OverleafSaved
         typeof record.project === "string" && canonicalProjectUrl(record.project) === record.project && validPdfPath(record.path) &&
         typeof record.oid === "string" && /^(?:[a-f\d]{40}|[a-f\d]{64})$/.test(record.oid) &&
         typeof record.savedAt === "number" && Number.isFinite(record.savedAt) && record.savedAt >= 0 &&
-        validFingerprint(record.fingerprint) && typeof record.thumbnail === "string" && record.thumbnail.length < MAX_THUMBNAIL_LENGTH &&
-        /^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(record.thumbnail);
+        validFigureMemory(record);
 }
 
 function recentFigures(values: readonly unknown[]): OverleafSavedFigure[] {

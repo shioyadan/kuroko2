@@ -44,6 +44,11 @@ export function validFingerprint(value: unknown): value is FigureFingerprint {
         validArray(f.ink, GRID * GRID, 255) && validArray(f.shapes, SHAPES.length, 30000);
 }
 
+export function validFigureMemory(record: Partial<FigureMemory>): boolean {
+    return validFingerprint(record.fingerprint) && typeof record.thumbnail === "string" &&
+        record.thumbnail.length < MAX_THUMBNAIL_LENGTH && /^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(record.thumbnail);
+}
+
 export async function describeFigure(svg: SvgDocument, preview: string): Promise<FigureMemory> {
     const image = new Image(); image.src = preview;
     await image.decode();
