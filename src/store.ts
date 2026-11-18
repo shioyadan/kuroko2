@@ -3,7 +3,7 @@
  */
 import { blobToText, readClipboard, readPaste, type ClipboardSvg } from "./core/clipboard";
 import { convertSvg } from "./core/convert";
-import { FALLBACK_FAMILIES, FontRegistry, MAX_FONT_BYTES, parseFont, type FontPromptMode, type LocalFontAccess } from "./core/fonts";
+import { FALLBACK_FAMILIES, FontRegistry, MAX_FONT_BYTES, type FontPromptMode, type LocalFontAccess } from "./core/fonts";
 import { renderPdf } from "./core/pdf_preview";
 import { fontKey, fontLabel, normalizeFontFamily, parseSvg, type FontRequirement, type SvgDocument } from "./core/svg";
 import { substituteFonts } from "./core/font_substitution";
@@ -148,8 +148,10 @@ export class Store {
             case "ADD_FONTS": {
                 if (this.state.busy || this.state.saving || !action.files.length) return;
                 const id = this.start("Reading font files…", true);
-                if (action.directory) this.fontFolderFiles = action.files;
-                void this.addFontFiles(action.files, !!action.directory, id);
+                if (action.directory) {
+                    this.fontFolderFiles = action.files;
+                    void this.resolveAndConvert(id, "never");
+                } else void this.addFontFiles(action.files, id);
                 break;
             }
             case "FONTS_FINISH":
@@ -267,31 +269,22 @@ export class Store {
     }
     private async scanFontFolder(id: number): Promise<void> {
         const required = this.state.document?.fonts ?? [];
+        const families = new Set([...required.map(font => font.family), ...FALLBACK_FAMILIES].map(normalizeFontFamily));
         for (const file of this.fontFolderFiles) {
             if (id !== this.requestId) return;
             if (!this.fonts.missingExact(required).length) break;
             if (!/\.(ttf|otf|ttc|otc)$/i.test(file.name) || file.size > MAX_FONT_BYTES) continue;
-            try {
-                const parsed = parseFont(new Uint8Array(await file.arrayBuffer()), file.name);
-                if (parsed.faces.some(face => face.aliases.some(alias =>
-                    required.some(font => normalizeFontFamily(alias) === normalizeFontFamily(font.family)) ||
-                    FALLBACK_FAMILIES.some(family => normalizeFontFamily(alias) === normalizeFontFamily(family))))) {
-                    await this.fonts.add(file);
-                }
-            } catch (error) { console.warn(message(error)); }
+            try { await this.fonts.add(file, families); }
+            catch (error) { console.warn(message(error)); }
         }
     }
-    private async addFontFiles(files: readonly File[], directory: boolean, id: number): Promise<void> {
-        try {
-            // Folder files are scanned by resolveAndConvert, including a search
-            // for exact bold faces before accepting a synthetic one.
-            if (!directory) for (const file of files) {
-                if (id !== this.requestId) return;
-                try { await this.fonts.add(file); console.info(`Loaded font: ${file.name}`); }
-                catch (error) { console.warn(message(error)); }
-            }
-            this.dispatch({ type: "FONTS_FINISH", id });
-        } catch (error) { this.dispatch({ type: "FAIL", id, error }); }
+    private async addFontFiles(files: readonly File[], id: number): Promise<void> {
+        for (const file of files) {
+            if (id !== this.requestId) return;
+            try { await this.fonts.add(file); console.info(`Loaded font: ${file.name}`); }
+            catch (error) { console.warn(message(error)); }
+        }
+        this.dispatch({ type: "FONTS_FINISH", id });
     }
     private async resolveAndConvert(id: number, promptMode: FontPromptMode = "automatic"): Promise<void> {
         const document = this.state.document;

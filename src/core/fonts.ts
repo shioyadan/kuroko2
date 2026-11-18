@@ -110,11 +110,6 @@ export function embeddingAllowed(face: FontFaceInfo): boolean {
 function faceMatches(face: FontFaceInfo, requirement: FontRequirement): boolean {
     return face.weight === requirement.weight && face.style === requirement.style && face.aliases.some(alias => normalizeFontFamily(alias) === normalizeFontFamily(requirement.family));
 }
-function syntheticBoldSource(requirement: FontRequirement): FontRequirement | undefined {
-    // Synthesize standard bold from the same family's regular-weight face,
-    // preserving italic style. Other weights still need an exact face.
-    return requirement.weight === 700 ? { ...requirement, weight: 400 } : undefined;
-}
 function hasGlyph(font: LoadedFont, face: FontFaceInfo, code: number): boolean {
     if (!face.cmap) return false;
     const v = new DataView(font.bytes.buffer, font.bytes.byteOffset, font.bytes.byteLength);
@@ -178,11 +173,11 @@ export class FontRegistry {
         }
         return undefined;
     }
+    private boldSource(requirement: FontRequirement): FontChoice | undefined {
+        return requirement.weight === 700 ? this.exact({ ...requirement, weight: 400 }) : undefined;
+    }
     private match(requirement: FontRequirement): FontChoice | undefined {
-        const exact = this.exact(requirement);
-        if (exact) return exact;
-        const source = syntheticBoldSource(requirement);
-        return source ? this.exact(source) : undefined;
+        return this.exact(requirement) ?? this.boldSource(requirement);
     }
     missing(requirements: readonly FontRequirement[]): FontRequirement[] {
         return requirements.filter(requirement => !this.match(requirement));
@@ -191,14 +186,15 @@ export class FontRegistry {
         return requirements.filter(requirement => !this.exact(requirement));
     }
     syntheticBold(requirements: readonly FontRequirement[]): FontRequirement[] {
-        return this.missingExact(requirements).filter(requirement => !!this.match(requirement));
+        return this.missingExact(requirements).filter(requirement => !!this.boldSource(requirement));
     }
-    async add(file: File): Promise<void> {
+    async add(file: File, families?: ReadonlySet<string>): Promise<void> {
         if (file.size > MAX_FONT_BYTES) throw new Error(`${file.name}: Font exceeds 64 MiB.`);
         const bytes = new Uint8Array(await file.arrayBuffer());
+        const font = parseFont(bytes, file.name);
+        if (families && !font.faces.some(face => face.aliases.some(alias => families.has(normalizeFontFamily(alias))))) return;
         const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(b => b.toString(16).padStart(2, "0")).join("");
         if (this.hashes.has(hash)) return;
-        const font = parseFont(bytes, file.name);
         // The WASM database loads every face in a TTC, so reject the whole collection if any face is restricted.
         if (font.faces.some(face => !embeddingAllowed(face))) throw new Error(`${file.name}: Restricted, bitmap-only or no-subsetting font embedding is not supported.`);
         if (this.totalBytes + bytes.length > 256 * 1024 * 1024) throw new Error("Loaded fonts exceed 256 MiB. Reload the app to release fonts.");
