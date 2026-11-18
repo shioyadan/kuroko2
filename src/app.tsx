@@ -91,7 +91,6 @@ export function App({ store }: { store: Store }) {
     const pageWidth = (documentData?.width ?? 800) * 72 / 96;
     const pageHeight = (documentData?.height ?? 600) * 72 / 96;
     const zoom = state.zoom === "fit" ? Math.max(0.02, Math.min((available.width - 64) / pageWidth, (available.height - 64) / pageHeight)) : state.zoom;
-    const svgPreview = documentData ? "data:image/svg+xml;charset=utf-8," + encodeURIComponent(documentData.sanitized) : "";
     const hasMissingFonts = state.missingFonts.length > 0;
     const openFonts = () => {
         closeFontsWhenReady.current = hasMissingFonts;
@@ -189,7 +188,8 @@ export function App({ store }: { store: Store }) {
                 <button onClick={() => svgInput.current?.click()}><BsFolder2Open /> Open an SVG file</button>
                 <span className="drop-hint">or drop an SVG here</span>
             </div> : <div className="preview-sheet" style={{ width: pageWidth * zoom, height: pageHeight * zoom }}>
-                <img src={state.preview ?? svgPreview} alt={state.preview ? "Generated PDF preview" : "Source SVG preview; PDF not yet generated"} draggable={false} />
+                <img src={state.preview ?? "data:image/svg+xml;charset=utf-8," + encodeURIComponent(documentData.sanitized)}
+                    alt={state.preview ? "Generated PDF preview" : "Source SVG preview; PDF not yet generated"} draggable={false} />
                 {!state.pdf && <span className="preview-label">SVG preview · PDF pending</span>}
             </div>}
             {dragging && <div className="drop-overlay">Drop SVG to create a PDF</div>}
