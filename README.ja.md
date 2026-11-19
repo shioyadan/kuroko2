@@ -48,7 +48,7 @@ git config --global credential.https://git.overleaf.com.helper 'cache --timeout=
 
 ## ライセンス
 
-Copyright (C) 2016–2026 Ryota Shioya
+Copyright (C) 2020–2026 Ryota Shioya
 
 [3-Clause BSD License](LICENSE.md) で公開しています。
 同梱ライブラリのライセンスは [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) とアプリ内の メニュー → About kuroko 2 → Licenses に記載しています。Microsoft のフォントは同梱していません。

@@ -49,7 +49,7 @@ For build instructions and development details, see the [development guide](docs
 
 ## License
 
-Copyright (C) 2016–2026 Ryota Shioya
+Copyright (C) 2020–2026 Ryota Shioya
 
 Released under the [3-Clause BSD License](LICENSE.md).
 Bundled library notices are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) and
