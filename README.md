@@ -17,6 +17,7 @@ kuroko 2 saves figures and charts you create in PowerPoint or Excel as PDFs you 
 ## How to use
 
 1. Open [kuroko 2](https://shioyadan.github.io/kuroko2/) in Chrome or Edge.
+    - Firefox currently has clipboard limitations that can prevent pasting figures.
 2. Select and copy a figure in PowerPoint or Excel.
 3. Return to kuroko 2 and press Ctrl+V (⌘V on Mac), or click Paste Objects.
 4. Check the PDF preview, then click Save PDF or press Ctrl+S (⌘S on Mac).

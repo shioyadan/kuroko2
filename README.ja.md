@@ -17,6 +17,7 @@ kuroko 2 は、PowerPoint や Execel で描いた図やグラフを LaTeX から
 ## 使い方
 
 1. Chrome または Edge で [kuroko 2](https://shioyadan.github.io/kuroko2/) を開きます。
+    - ブラウザの制約により，現在 Firefox ではペーストがうまく使えません。
 2. PowerPoint や Excel で図を選択し、コピーします。
 3. kuroko 2 に戻り、Ctrl+V（Mac では ⌘V）を押すか、Paste Objects をクリックします。
 4. PDF のプレビューを確認し、Save PDF または Ctrl+S / ⌘S で保存します。
