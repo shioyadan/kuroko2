@@ -2,17 +2,16 @@
 
 English | [日本語](README.ja.md)
 
-kuroko 2 is a small tool for saving figures copied from PowerPoint or Excel as PDF files.
-A typical use is preparing figures for LaTeX papers and presentations.
+kuroko 2 saves figures and charts you create in PowerPoint or Excel as PDFs you can include in LaTeX documents.
 
 - Getting started
-    - **[Open the web app](https://shioyadan.github.io/kuroko2/)** — no installation required.
-    - [Download the offline app](https://shioyadan.github.io/kuroko2/kuroko-latest.zip) — extract the ZIP and open `index.html`.
-        - The offline app is required to upload PDFs to Overleaf.
+    - [Web app](https://shioyadan.github.io/kuroko2/)
+        - Open the link in your browser to get started. PDF conversion runs entirely in your browser without contacting external servers.
+    - [Offline app](https://shioyadan.github.io/kuroko2/kuroko-latest.zip)
+        - Extract the downloaded ZIP and open `index.html`.
 - Features
     - Shapes and text stay sharp as vectors. Effects such as shadows may be saved as images.
-    - PDF conversion runs entirely in your browser without communicating with a server.
-        - Overleaf transfers use your local Git installation. Only this feature communicates with the locally running server.
+    - Uploading to Overleaf requires the offline app. Only the Overleaf feature uses the local server, which runs Git on your computer to transfer files.
 
 
 ## How to use
@@ -20,36 +19,31 @@ A typical use is preparing figures for LaTeX papers and presentations.
 1. Open [kuroko 2](https://shioyadan.github.io/kuroko2/) in Chrome or Edge.
 2. Select and copy a figure in PowerPoint or Excel.
 3. Return to kuroko 2 and press Ctrl+V (⌘V on Mac), or click Paste Objects.
-4. If fonts are missing, check the substitute-font preview or load the original fonts.
-5. Check the PDF preview, then click Save PDF or press Ctrl+S / ⌘S.
+4. Check the PDF preview, then click Save PDF or press Ctrl+S (⌘S on Mac).
+    - If fonts are missing, check the preview with substitute fonts or click Add fonts… to load the originals.
 
 
-### Using Overleaf
+### Connecting to Overleaf
 
-When opened through the local launcher, kuroko 2 can upload generated PDFs to an
-Overleaf project, or retrieve project PDFs for preview and download.
-Python 3 and Git are required. On Windows, run the launcher in WSL. This feature
-is available at the URL printed by the launcher; it is unavailable in the hosted
-web app or when opening the HTML file directly.
+Run `./kuroko2.sh` from the extracted folder and open the URL it prints. From there you can upload the PDF you just created to an Overleaf project, or preview and download PDFs already in the project. This feature requires Python 3 and Git. On Windows, run the script in WSL. The hosted web app and an HTML file opened directly cannot connect to Overleaf.
 
-This feature uses your local Git installation to work with project files, so make
-sure Git can connect to Overleaf. The following setting caches your token after
-successful authentication:
+Make sure Git can access your Overleaf project from the environment where you run the script. To cache your token for eight hours after successful authentication, run the following command.
 
-```
+```sh
 git config --global credential.https://git.overleaf.com.helper 'cache --timeout=28800'
 ```
 
+
 ## Known limitations and troubleshooting
 
-- Saving to WSL from Windows: Chrome's file access restrictions can reject WSL folders after you confirm the save dialog. Save to a Windows folder and copy the PDF into WSL, or try Download PDF instead.
+- When saving from Windows to a WSL folder, Chrome may deny access even after you confirm the save dialog. Save to a Windows folder and copy the PDF into WSL, or try Download PDF instead.
 
 
 ## How to build
 
 Most users should use the [web app](https://shioyadan.github.io/kuroko2/) or
 [offline download](https://shioyadan.github.io/kuroko2/kuroko-latest.zip).
-For building from source and contributing, see the [development guide](docs/development.md).
+For build instructions and development details, see the [development guide](docs/development.md).
 
 
 ## License
